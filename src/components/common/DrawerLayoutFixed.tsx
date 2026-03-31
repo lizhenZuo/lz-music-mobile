@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
-import { DrawerLayoutAndroid, type DrawerLayoutAndroidProps, View, type LayoutChangeEvent } from 'react-native'
+import { Animated, DrawerLayoutAndroid, type DrawerLayoutAndroidProps, Platform, Pressable, View, type LayoutChangeEvent } from 'react-native'
 // import { getWindowSise } from '@/utils/tools'
 import { usePageVisible } from '@/store/common/hook'
 import { type COMPONENT_IDS } from '@/config/constant'
@@ -21,6 +21,8 @@ const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNav
   const [w, setW] = useState<number | `${number}%`>('100%')
   const [drawerWidth, setDrawerWidth] = useState(0)
   const changedRef = useRef({ width: 0, changed: false })
+  const [iosDrawerVisible, setIosDrawerVisible] = useState(false)
+  const iosDrawerTranslateX = useRef(new Animated.Value(0)).current
 
   const fixDrawerWidth = useCallback(() => {
     if (!changedRef.current.width) return
@@ -37,15 +39,41 @@ const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNav
 
   useImperativeHandle(ref, () => ({
     openDrawer() {
-      drawerLayoutRef.current?.openDrawer()
+      if (Platform.OS === 'android') {
+        drawerLayoutRef.current?.openDrawer()
+        return
+      }
+      setIosDrawerVisible(true)
+      iosDrawerTranslateX.stopAnimation()
+      iosDrawerTranslateX.setValue(props.drawerPosition === 'right' ? drawerWidth : -drawerWidth)
+      Animated.timing(iosDrawerTranslateX, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => {
+        props.onDrawerOpen?.()
+      })
     },
     closeDrawer() {
-      drawerLayoutRef.current?.closeDrawer()
+      if (Platform.OS === 'android') {
+        drawerLayoutRef.current?.closeDrawer()
+        return
+      }
+      if (!iosDrawerVisible) return
+      iosDrawerTranslateX.stopAnimation()
+      Animated.timing(iosDrawerTranslateX, {
+        toValue: props.drawerPosition === 'right' ? drawerWidth : -drawerWidth,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => {
+        setIosDrawerVisible(false)
+        props.onDrawerClose?.()
+      })
     },
     fixWidth() {
       fixDrawerWidth()
     },
-  }), [fixDrawerWidth])
+  }), [drawerWidth, fixDrawerWidth, iosDrawerTranslateX, iosDrawerVisible, props])
 
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
@@ -75,16 +103,73 @@ const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNav
       onLayout={handleLayout}
       style={{ width: w, flex: 1 }}
     >
-      <DrawerLayoutAndroid
-        ref={drawerLayoutRef}
-        keyboardDismissMode="on-drag"
-        drawerWidth={drawerWidth}
-        {...props}
-      >
-        <View style={{ marginRight: w == '100%' ? 0 : -1, flex: 1 }}>
-          {children}
-        </View>
-      </DrawerLayoutAndroid>
+      {
+        Platform.OS === 'android'
+          ? (
+            <DrawerLayoutAndroid
+              ref={drawerLayoutRef}
+              keyboardDismissMode="on-drag"
+              drawerWidth={drawerWidth}
+              {...props}
+            >
+              <View style={{ marginRight: w == '100%' ? 0 : -1, flex: 1 }}>
+                {children}
+              </View>
+            </DrawerLayoutAndroid>
+            )
+          : (
+            <View style={{ flex: 1 }}>
+              {children}
+              {
+                iosDrawerVisible && drawerWidth
+                  ? (
+                    <>
+                      <Pressable
+                        onPress={() => {
+                          if (!iosDrawerVisible) return
+                          Animated.timing(iosDrawerTranslateX, {
+                            toValue: props.drawerPosition === 'right' ? drawerWidth : -drawerWidth,
+                            duration: 180,
+                            useNativeDriver: true,
+                          }).start(() => {
+                            setIosDrawerVisible(false)
+                            props.onDrawerClose?.()
+                          })
+                        }}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          backgroundColor: 'rgba(0, 0, 0, 0.24)',
+                        }}
+                      />
+                      <Animated.View
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          bottom: 0,
+                          width: drawerWidth,
+                          [props.drawerPosition === 'right' ? 'right' : 'left']: 0,
+                          backgroundColor: props.drawerBackgroundColor,
+                          transform: [{ translateX: iosDrawerTranslateX }],
+                          shadowColor: '#000',
+                          shadowOpacity: 0.18,
+                          shadowRadius: 12,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: 6,
+                        }}
+                      >
+                        {props.renderNavigationView?.()}
+                      </Animated.View>
+                    </>
+                    )
+                  : null
+              }
+            </View>
+            )
+      }
     </View>
   )
 })

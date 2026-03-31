@@ -1,13 +1,15 @@
-import { Dimensions, StatusBar } from 'react-native'
+import { Dimensions, Platform, StatusBar } from 'react-native'
 import { getWindowSize as getWindowSizeRaw } from './nativeModules/utils'
 // import { log } from './log'
 
 export type SizeHandler = (size: { width: number, height: number }) => void
 export const getWindowSize = async() => {
   return getWindowSizeRaw().then((size) => {
-    const scale = Dimensions.get('window').scale
-    size.width = size.width / scale
-    size.height = size.height / scale
+    if (Platform.OS !== 'ios') {
+      const scale = Dimensions.get('window').scale
+      size.width = size.width / scale
+      size.height = size.height / scale
+    }
     return size
   })
 }

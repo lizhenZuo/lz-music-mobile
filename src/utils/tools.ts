@@ -11,6 +11,7 @@ import { scaleSizeH, scaleSizeW, setSpText } from './pixelRatio'
 import { toOldMusicInfo } from './index'
 import { stringMd5 } from 'react-native-quick-md5'
 import { windowSizeTools } from '@/utils/windowSizeTools'
+import { ensureQualityList } from '@/utils/globalState'
 
 
 // https://stackoverflow.com/a/47349998
@@ -25,8 +26,7 @@ export const getDeviceLanguage = async() => {
 
 
 export const isAndroid = Platform.OS === 'android'
-// @ts-expect-error
-export const osVer = Platform.constants.Release as string
+export const osVer = (Platform.constants as { Release?: string }).Release ?? String(Platform.Version)
 
 export const isActive = () => AppState.currentState == 'active'
 
@@ -56,9 +56,13 @@ export const TEMP_FILE_PATH = temporaryDirectoryPath + '/tempFile'
 //   // return windowSize
 // }
 
-export const checkStoragePermissions = async() => PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE)
+export const checkStoragePermissions = async() => {
+  if (!isAndroid) return true
+  return PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE)
+}
 
 export const requestStoragePermission = async() => {
+  if (!isAndroid) return true
   const isGranted = await checkStoragePermissions()
   if (isGranted) return isGranted
 
@@ -105,6 +109,10 @@ export const requestStoragePermission = async() => {
  * @param position 位置
  */
 export const toast = (message: string, duration: 'long' | 'short' = 'short', position: 'top' | 'center' | 'bottom' = 'bottom') => {
+  if (!isAndroid) {
+    console.info(`[toast:${duration}:${position}] ${message}`)
+    return
+  }
   let _duration
   switch (duration) {
     case 'long':
@@ -138,7 +146,8 @@ export const toast = (message: string, duration: 'long' | 'short' = 'short', pos
 export const openUrl = async(url: string): Promise<void> => Linking.canOpenURL(url).then(async() => Linking.openURL(url))
 
 export const assertApiSupport = (source: LX.Source): boolean => {
-  return source == 'local' || global.lx.qualityList[source] != null
+  const qualityList = ensureQualityList()
+  return source == 'local' || qualityList[source] != null
 }
 
 // const handleRemoveDataMultiple = async keys => {
@@ -147,6 +156,7 @@ export const assertApiSupport = (source: LX.Source): boolean => {
 // }
 
 export const exitApp = () => {
+  if (!isAndroid) return
   BackHandler.exitApp()
 }
 
@@ -514,7 +524,6 @@ export const createStyle = <T extends StyleSheet.NamedStyles<T>>(styles: T | Sty
   for (const [n, s] of Object.entries(newStyle)) {
     newStyle[n] = trasformeStyle(s)
   }
-  // @ts-expect-error
   return StyleSheet.create(newStyle as StyleSheet.NamedStyles<T>)
 }
 

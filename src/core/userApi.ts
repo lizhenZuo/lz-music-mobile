@@ -2,10 +2,11 @@ import { action, state } from '@/store/userApi'
 import { addUserApi, getUserApiScript, removeUserApi as removeUserApiFromStore, setUserApiAllowShowUpdateAlert as setUserApiAllowShowUpdateAlertFromStore } from '@/utils/data'
 import { destroy, loadScript } from '@/utils/nativeModules/userApi'
 import { log as writeLog } from '@/utils/log'
+import { ensureLx } from '@/utils/globalState'
 
 
 export const setUserApi = async(apiId: string) => {
-  global.lx.qualityList = {}
+  ensureLx().qualityList = {}
   setUserApiStatus(false, 'initing')
 
   const target = state.list.find(api => api.id === apiId)
@@ -57,18 +58,18 @@ export const log = {
   },
   log(...params: any[]) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    if (global.lx.isEnableUserApiLog) writeLog.info(...params)
+    if (ensureLx().isEnableUserApiLog) writeLog.info(...params)
   },
   info(...params: any[]) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    if (global.lx.isEnableUserApiLog) writeLog.info(...params)
+    if (ensureLx().isEnableUserApiLog) writeLog.info(...params)
   },
   warn(...params: any[]) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    if (global.lx.isEnableUserApiLog) writeLog.warn(...params)
+    if (ensureLx().isEnableUserApiLog) writeLog.warn(...params)
   },
   error(...params: any[]) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    if (global.lx.isEnableUserApiLog) writeLog.error(...params)
+    if (ensureLx().isEnableUserApiLog) writeLog.error(...params)
   },
 }

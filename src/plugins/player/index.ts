@@ -1,5 +1,6 @@
 import TrackPlayer from 'react-native-track-player'
 import { updateOptions, setVolume, setPlaybackRate, migratePlayerCache } from './utils'
+import { ensurePlayerStatus } from '@/utils/globalState'
 
 // const listenEvent = () => {
 //   TrackPlayer.addEventListener('playback-error', err => {
@@ -23,8 +24,9 @@ const initial = async({ volume, playRate, cacheSize, isHandleAudioFocus, isEnabl
   isHandleAudioFocus: boolean
   isEnableAudioOffload: boolean
 }) => {
-  if (global.lx.playerStatus.isIniting || global.lx.playerStatus.isInitialized) return
-  global.lx.playerStatus.isIniting = true
+  const playerStatus = ensurePlayerStatus()
+  if (playerStatus.isIniting || playerStatus.isInitialized) return
+  playerStatus.isIniting = true
   console.log('Cache Size', cacheSize * 1024)
   await migratePlayerCache()
   await TrackPlayer.setupPlayer({
@@ -35,8 +37,8 @@ const initial = async({ volume, playRate, cacheSize, isHandleAudioFocus, isEnabl
     audioOffload: isEnableAudioOffload,
     autoUpdateMetadata: false,
   })
-  global.lx.playerStatus.isInitialized = true
-  global.lx.playerStatus.isIniting = false
+  playerStatus.isInitialized = true
+  playerStatus.isIniting = false
   await updateOptions()
   await setVolume(volume)
   await setPlaybackRate(playRate)
@@ -44,7 +46,7 @@ const initial = async({ volume, playRate, cacheSize, isHandleAudioFocus, isEnabl
 }
 
 
-const isInitialized = () => global.lx.playerStatus.isInitialized
+const isInitialized = () => ensurePlayerStatus().isInitialized
 
 
 export {

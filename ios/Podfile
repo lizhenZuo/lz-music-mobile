@@ -17,7 +17,7 @@ prepare_react_native_project!
 #   dependencies: {
 #     ...(process.env.NO_FLIPPER ? { 'react-native-flipper': { platforms: { ios: null } } } : {}),
 # ```
-flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
+flipper_config = FlipperConfiguration.disabled
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -30,6 +30,7 @@ target 'LxMusicMobile' do
 
   use_react_native!(
     :path => config[:reactNativePath],
+    :hermes_enabled => false,
     # Enables Flipper.
     #
     # Note that if you have use_frameworks! enabled, Flipper will not work and
@@ -51,5 +52,51 @@ target 'LxMusicMobile' do
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
+
+    installer.pods_project.targets.each do |target|
+      next unless ['fmt', 'Flipper-Fmt'].include?(target.name)
+
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        definitions = build_config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+        definitions = [definitions] unless definitions.is_a?(Array)
+        definitions << 'FMT_USE_CHAR8_T=0' unless definitions.include?('FMT_USE_CHAR8_T=0')
+        build_config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = definitions
+      end
+    end
+
+    fmt_header_path = File.join(__dir__, 'Pods', 'fmt', 'include', 'fmt', 'core.h')
+    if File.exist?(fmt_header_path)
+      content = File.read(fmt_header_path)
+      patched = content.gsub("namespace std {\ntemplate <> struct char_traits<fmt::internal::char8_type> : char_traits<char> {\n  using char_type = fmt::internal::char8_type;\n  static size_t length(const char_type* s) {\n    size_t len = 0;\n    while (s[len] != 0) ++len;\n    return len;\n  }\n};\n}  // namespace std\n\n", "")
+      patched = patched.gsub("enum char8_type : unsigned char {};",
+        "using char8_type = unsigned char;")
+      patched = patched.gsub("using char8_type = char;",
+        "using char8_type = unsigned char;")
+      if !patched.include?("template <> struct char_traits<unsigned char>")
+        patched = patched.gsub("#include <vector>\n\n",
+          "#include <vector>\n\nnamespace std {\ntemplate <> struct char_traits<unsigned char> : char_traits<char> {\n  using char_type = unsigned char;\n  static size_t length(const char_type* s) {\n    size_t len = 0;\n    while (s[len] != 0) ++len;\n    return len;\n  }\n};\n}  // namespace std\n\n")
+      end
+      patched = patched.gsub("  basic_string_view(const Char* s)\n      : data_(s), size_(std::char_traits<Char>::length(s)) {}",
+        "  basic_string_view(const Char* s)\n      : data_(s), size_(0) {\n    while (s[size_] != 0) ++size_;\n  }")
+      if patched != content
+        File.chmod(0644, fmt_header_path)
+        File.write(fmt_header_path, patched)
+      end
+    end
+
+    fmt_format_path = File.join(__dir__, 'Pods', 'fmt', 'include', 'fmt', 'format.h')
+    if File.exist?(fmt_format_path)
+      content = File.read(fmt_format_path)
+      if content.include?("using char8_type = char;")
+        patched = content.gsub("using char8_type = char;", "enum char8_type : unsigned char {};")
+      else
+        patched = content
+      end
+      if patched != content
+        File.chmod(0644, fmt_format_path)
+        File.write(fmt_format_path, patched)
+      end
+    end
   end
 end

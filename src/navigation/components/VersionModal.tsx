@@ -182,19 +182,19 @@ const VersionModal = ({ componentId }: { componentId: string }) => {
           ignoreBtn.show
             ? (
                 <Button disabled={ignoreBtn.disabled} style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleIgnore}>
-                  <Text color={theme['c-button-font']}>{ignoreBtn.text}</Text>
+                  <Text style={styles.btnText} color={theme['c-button-font']}>{ignoreBtn.text}</Text>
                 </Button>
               )
             : null
         }
         <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleCancel}>
-          <Text color={theme['c-button-font']}>{closeBtnText}</Text>
+          <Text style={styles.btnText} color={theme['c-button-font']}>{closeBtnText}</Text>
         </Button>
         {
           confirmBtn.show
             ? (
                 <Button disabled={confirmBtn.disabled} style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={handleConfirm}>
-                  <Text color={theme['c-button-font']}>{confirmBtn.text}</Text>
+                  <Text style={styles.btnText} color={theme['c-button-font']}>{confirmBtn.text}</Text>
                 </Button>
               )
             : null
@@ -243,21 +243,26 @@ const styles = createStyle({
   btns: {
     flexDirection: 'row',
     justifyContent: 'center',
+    flexWrap: 'wrap',
     paddingBottom: 15,
     paddingLeft: 15,
-    // paddingRight: 15,
+    paddingRight: 5,
   },
   btn: {
     flex: 1,
+    minWidth: 120,
     paddingTop: 10,
     paddingBottom: 10,
     paddingLeft: 10,
     paddingRight: 10,
     alignItems: 'center',
     borderRadius: 4,
-    marginRight: 15,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  btnText: {
+    textAlign: 'center',
   },
 })
 
 export default VersionModal
-

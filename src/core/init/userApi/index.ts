@@ -72,9 +72,9 @@ export default async(setting: LX.AppSetting) => {
     else target.reject(new Error(errorMessage ?? 'failed'))
   }
   const handleStateChange = ({ status, errorMessage, info }: InitParams) => {
-    // console.log(status, message, info)
-    setUserApiStatus(status, errorMessage)
     if (!info || info.id !== settingState.setting['common.apiSource']) return
+    // 只允许当前选中的自定义源更新状态，避免旧源异步结果覆盖新选择
+    setUserApiStatus(status, errorMessage)
     if (status) {
       if (info.sources) {
         let apis: any = {}

@@ -35,7 +35,7 @@ const handleReadDir = async(path: string, dirOnly: boolean, filter?: string[], i
         list.push({
           name: path.name,
           path: path.path,
-          mtime: new Date(path.lastModified),
+          mtime: new Date(path.lastModified ?? 0),
           size: path.size,
           isDir: isDirectory,
           sizeText: isDirectory ? '' : sizeFormate(path.size ?? 0),
@@ -45,7 +45,7 @@ const handleReadDir = async(path: string, dirOnly: boolean, filter?: string[], i
         list.push({
           name: path.name,
           path: path.path,
-          mtime: new Date(path.lastModified),
+          mtime: new Date(path.lastModified ?? 0),
           size: path.size,
           isDir: isDirectory,
           sizeText: isDirectory ? '' : sizeFormate(path.size ?? 0),
@@ -193,4 +193,3 @@ const styles = createStyle({
     flex: 1,
   },
 })
-

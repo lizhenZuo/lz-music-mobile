@@ -14,7 +14,6 @@ export const showModal = () => {
 }
 
 export const hideModal = (componentId: string) => {
-  if (!versionState.showModal) return
   versionActions.setVisibleModal(false)
   void Navigation.dismissOverlay(componentId)
 }

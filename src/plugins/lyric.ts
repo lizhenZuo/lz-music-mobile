@@ -98,6 +98,10 @@ export const pause = () => {
   lrcTools.lrc!.pause()
 }
 
+export const getLineInfo = (time: number) => {
+  return (lrcTools.lrc as any)?.getLineInfo?.(time) ?? null
+}
+
 // on lyric play hook
 export const useLrcPlay = (autoUpdate = true) => {
   const [lrcInfo, setLrcInfo] = useState(lrcTools.currentLineData)
@@ -134,4 +138,3 @@ export const useLrcSet = () => {
 
   return lines
 }
-

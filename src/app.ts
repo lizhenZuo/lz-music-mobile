@@ -11,6 +11,10 @@ import { tipDialog } from './utils/tools'
 console.log('starting app...')
 listenLaunchEvent()
 
+const shouldRunIosDevChecks = __DEV__ && Boolean((global as typeof globalThis & {
+  __LX_IOS_DEV_CHECKS__?: boolean
+}).__LX_IOS_DEV_CHECKS__)
+
 void Promise.all([getFontSize(), windowSizeTools.init()]).then(async([fontSize]) => {
   global.lx.fontSize = fontSize
   bootLog('Font size setting loaded.')
@@ -50,10 +54,17 @@ void Promise.all([getFontSize(), windowSizeTools.init()]).then(async([fontSize])
   initNavigation(async() => {
     await handleInit()
     if (!isInited) return
-    // import('@/utils/nativeModules/cryptoTest')
 
     await navigations.pushHomeScreen().then(() => {
       void handlePushedHomeScreen()
+      if (shouldRunIosDevChecks) {
+        const regressionPromise = import('./dev/iosRegression').then(({ runIosRegression }) => runIosRegression()).catch((err) => {
+          console.log('[iOS Regression] load failed', err)
+        })
+        void regressionPromise.then(() => import('./dev/iosPageAudit')).then(({ runIosPageAudit }) => runIosPageAudit()).catch((err) => {
+          console.log('[iOS Page Audit] load failed', err)
+        })
+      }
     }).catch((err: any) => {
       void tipDialog({
         title: 'Error',

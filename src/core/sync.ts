@@ -1,6 +1,8 @@
-import { dismissOverlay, onModalDismissed, showSyncModeModal } from '@/navigation'
+import { dismissOverlay, showSyncModeModal } from '@/navigation'
+import { Navigation } from 'react-native-navigation'
 import syncState from '@/store/sync/state'
 import syncActions from '@/store/sync/action'
+import { type EmitterSubscription } from 'react-native'
 
 type RemoveListener = (() => void) | null
 let removeEvent: RemoveListener
@@ -48,10 +50,18 @@ export const selectSyncMode = async<T extends keyof LX.Sync.ModeTypes>(serverNam
 
   global.app_event.on('selectSyncMode', handleSelectMode)
 
-  let removeListener: RemoveListener = onModalDismissed(syncState.syncModeComponentId, () => {
+  let modalDismissedListener: EmitterSubscription | null = Navigation.events().registerModalDismissedListener(({ componentId }) => {
+    if (!modalDismissedListener || componentId != syncState.syncModeComponentId) return
     syncActions.setSyncModeComponentId('')
     removeEvent?.()
+    modalDismissedListener.remove()
+    modalDismissedListener = null
   })
+  let removeListener: RemoveListener = () => {
+    if (!modalDismissedListener) return
+    modalDismissedListener.remove()
+    modalDismissedListener = null
+  }
 })
 
 export const removeSyncModeEvent = () => {

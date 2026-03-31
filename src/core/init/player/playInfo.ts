@@ -10,9 +10,14 @@ export default async(setting: LX.AppSetting) => {
 
   const list = await getListMusics(info.listId)
   if (!list[info.index]) return
-  global.lx.restorePlayInfo = info
-
-  await playList(info.listId, info.index)
+  try {
+    global.lx.restorePlayInfo = info
+    await playList(info.listId, info.index)
+  } catch (err) {
+    global.lx.restorePlayInfo = null
+    console.log('[player init] restore play info failed', err)
+    return
+  }
 
   if (setting['player.startupAutoPlay']) setTimeout(play)
 

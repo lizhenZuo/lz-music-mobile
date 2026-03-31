@@ -1,5 +1,6 @@
 import TrackPlayer, { State } from 'react-native-track-player'
 import BackgroundTimer from 'react-native-background-timer'
+import { Platform } from 'react-native'
 import { defaultUrl } from '@/config'
 // import { action as playerAction } from '@/store/modules/player'
 import settingState from '@/store/setting/state'
@@ -140,11 +141,37 @@ const handlePlayMusic = async(musicInfo: LX.Player.PlayMusic, url: string, time:
 // console.log(tracks, time)
   const tracks = buildTracks(musicInfo, url)
   const track = tracks[0]
+  console.log('[player] handlePlayMusic start', { url, time, trackId: track?.id })
+
+  if (Platform.OS === 'ios') {
+    await TrackPlayer.reset()
+    list.splice(0, list.length)
+    await TrackPlayer.add(tracks).then(() => list.push(...tracks))
+    console.log('[player] ios reset/add done', { listLength: list.length })
+    if (!isTempTrack(track.id as string)) {
+      if (time) await TrackPlayer.seekTo(time)
+      if (global.lx.restorePlayInfo) {
+        await TrackPlayer.pause()
+        global.lx.restorePlayInfo = null
+      } else {
+        console.log('[player] ios play current track')
+        await TrackPlayer.play()
+      }
+    }
+    return
+  }
+
   // await updateMusicInfo(track)
   const currentTrackIndex = await TrackPlayer.getCurrentTrack()
+  console.log('[player] currentTrackIndex before add', currentTrackIndex)
   await TrackPlayer.add(tracks).then(() => list.push(...tracks))
+  console.log('[player] add done', { listLength: list.length })
   const queue = await TrackPlayer.getQueue() as LX.Player.Track[]
-  await TrackPlayer.skip(queue.findIndex(t => t.id == track.id))
+  console.log('[player] queue length after add', queue.length)
+  const nextIndex = queue.findIndex(t => t.id == track.id)
+  console.log('[player] skip target index', nextIndex)
+  await TrackPlayer.skip(nextIndex)
+  console.log('[player] skip done', nextIndex)
 
   if (currentTrackIndex == null) {
     if (!isTempTrack(track.id as string)) {
@@ -157,6 +184,7 @@ const handlePlayMusic = async(musicInfo: LX.Player.PlayMusic, url: string, time:
       // TODO startupAutoPlay
       // if (startupAutoPlay) store.dispatch(playerAction.playMusic())
       } else {
+        console.log('[player] play current track')
         await TrackPlayer.play()
       }
     }
@@ -164,6 +192,7 @@ const handlePlayMusic = async(musicInfo: LX.Player.PlayMusic, url: string, time:
     await TrackPlayer.pause()
     if (!isTempTrack(track.id as string)) {
       await TrackPlayer.seekTo(time)
+      console.log('[player] resume new track')
       await TrackPlayer.play()
     }
   }
@@ -212,13 +241,18 @@ const updateMetaInfo = async(mInfo: LX.Player.MusicInfo, lyric?: string) => {
     name = lyric
     singer = `${mInfo.name}${mInfo.singer ? ` - ${mInfo.singer}` : ''}`
   }
-  await TrackPlayer.updateNowPlayingMetadata({
+  const metadata = {
     title: name,
     artist: singer,
     album: mInfo.album ?? undefined,
     artwork,
     duration: state.prevDuration || 0,
-  }, state.isPlaying)
+  }
+  if (Platform.OS === 'ios') {
+    await TrackPlayer.updateNowPlayingMetadata(metadata)
+  } else {
+    await TrackPlayer.updateNowPlayingMetadata(metadata, state.isPlaying)
+  }
 }
 
 

@@ -1,6 +1,27 @@
 import { NativeModules, NativeEventEmitter } from 'react-native'
+import * as Lyric from '@/plugins/lyric'
 
 const { LyricModule } = NativeModules
+const listeners = {
+  position: new Set<(position: { x: number, y: number }) => void>(),
+  line: new Set<(lineInfo: { text: string, extendedLyrics: string[] }) => void>(),
+}
+let lastLineText = ''
+let fallbackState = {
+  currentTime: 0,
+  playbackRate: 1,
+  isPlaying: false,
+}
+
+const emitLyricLine = () => {
+  if (!listeners.line.size) return
+  const line = Lyric.getLineInfo(fallbackState.currentTime)
+  const text = line?.line ?? ''
+  const extendedLyrics = [line?.translation, line?.roman]?.filter((value): value is string => !!value)
+  if (text === lastLineText && !extendedLyrics.length) return
+  lastLineText = text
+  for (const handler of listeners.line) handler({ text, extendedLyrics })
+}
 
 // export const themes = [
 //   { id: 'green', value: '#07c556' },
@@ -38,7 +59,8 @@ const getTextSize = (num: number) => num / 10
  * @returns
  */
 export const setSendLyricTextEvent = async(isSend: boolean) => {
-  return LyricModule.setSendLyricTextEvent(isSend)
+  if (LyricModule?.setSendLyricTextEvent) return LyricModule.setSendLyricTextEvent(isSend)
+  if (isSend) emitLyricLine()
 }
 
 /**
@@ -75,6 +97,7 @@ export const showDesktopLyricView = async({
   textPositionX: LX.AppSetting['desktopLyric.textPosition.x']
   textPositionY: LX.AppSetting['desktopLyric.textPosition.y']
 }): Promise<void> => {
+  if (!LyricModule?.showDesktopLyric) return
   return LyricModule.showDesktopLyric({
     isSingleLine,
     isShowToggleAnima,
@@ -97,6 +120,7 @@ export const showDesktopLyricView = async({
  * hide lyric
  */
 export const hideDesktopLyricView = async(): Promise<void> => {
+  if (!LyricModule?.hideDesktopLyric) return
   return LyricModule.hideDesktopLyric()
 }
 
@@ -107,6 +131,12 @@ export const hideDesktopLyricView = async(): Promise<void> => {
  * @returns {Promise} Promise
  */
 export const play = async(time: number): Promise<void> => {
+  fallbackState.currentTime = time
+  fallbackState.isPlaying = true
+  if (!LyricModule?.play) {
+    emitLyricLine()
+    return
+  }
   return LyricModule.play(time)
 }
 
@@ -114,6 +144,8 @@ export const play = async(time: number): Promise<void> => {
  * pause lyric
  */
 export const pause = async(): Promise<void> => {
+  fallbackState.isPlaying = false
+  if (!LyricModule?.pause) return
   return LyricModule.pause()
 }
 
@@ -124,10 +156,16 @@ export const pause = async(): Promise<void> => {
  * @param romalrc lyric translation
  */
 export const setLyric = async(lyric: string, translation: string, romalrc: string): Promise<void> => {
+  Lyric.setLyric(lyric, translation || '', romalrc || '')
+  lastLineText = ''
+  emitLyricLine()
+  if (!LyricModule?.setLyric) return
   return LyricModule.setLyric(lyric, translation || '', romalrc || '')
 }
 
 export const setPlaybackRate = async(rate: number): Promise<void> => {
+  fallbackState.playbackRate = rate
+  if (!LyricModule?.setPlaybackRate) return
   return LyricModule.setPlaybackRate(rate)
 }
 
@@ -136,6 +174,9 @@ export const setPlaybackRate = async(rate: number): Promise<void> => {
  * @param isShowTranslation is show translation
  */
 export const toggleTranslation = async(isShowTranslation: boolean): Promise<void> => {
+  Lyric.toggleTranslation(isShowTranslation)
+  emitLyricLine()
+  if (!LyricModule?.toggleTranslation) return
   return LyricModule.toggleTranslation(isShowTranslation)
 }
 
@@ -144,6 +185,9 @@ export const toggleTranslation = async(isShowTranslation: boolean): Promise<void
  * @param isShowRoma is show roma lyric
  */
 export const toggleRoma = async(isShowRoma: boolean): Promise<void> => {
+  Lyric.toggleRoma(isShowRoma)
+  emitLyricLine()
+  if (!LyricModule?.toggleRoma) return
   return LyricModule.toggleRoma(isShowRoma)
 }
 
@@ -152,6 +196,7 @@ export const toggleRoma = async(isShowRoma: boolean): Promise<void> => {
  * @param isLock is lock lyric window
  */
 export const toggleLock = async(isLock: boolean): Promise<void> => {
+  if (!LyricModule?.toggleLock) return
   return LyricModule.toggleLock(isLock)
 }
 
@@ -162,6 +207,7 @@ export const toggleLock = async(isLock: boolean): Promise<void> => {
  * @param shadowColor
  */
 export const setColor = async(unplayColor: string, playedColor: string, shadowColor: string): Promise<void> => {
+  if (!LyricModule?.setColor) return
   return LyricModule.setColor(unplayColor, playedColor, shadowColor)
 }
 
@@ -170,6 +216,7 @@ export const setColor = async(unplayColor: string, playedColor: string, shadowCo
  * @param alpha text alpha
  */
 export const setAlpha = async(alpha: number): Promise<void> => {
+  if (!LyricModule?.setAlpha) return
   return LyricModule.setAlpha(getAlpha(alpha))
 }
 
@@ -178,26 +225,35 @@ export const setAlpha = async(alpha: number): Promise<void> => {
  * @param size text size
  */
 export const setTextSize = async(size: number): Promise<void> => {
+  if (!LyricModule?.setTextSize) return
   return LyricModule.setTextSize(getTextSize(size))
 }
 
 export const setShowToggleAnima = async(isShowToggleAnima: boolean): Promise<void> => {
+  if (!LyricModule?.setShowToggleAnima) return
   return LyricModule.setShowToggleAnima(isShowToggleAnima)
 }
 
 export const setSingleLine = async(isSingleLine: boolean): Promise<void> => {
+  if (!LyricModule?.setSingleLine) return
   return LyricModule.setSingleLine(isSingleLine)
 }
 
 export const setPosition = async(x: number, y: number): Promise<void> => {
+  if (!LyricModule?.setPosition) {
+    for (const handler of listeners.position) handler({ x, y })
+    return
+  }
   return LyricModule.setPosition(x, y)
 }
 
 export const setMaxLineNum = async(maxLineNum: number): Promise<void> => {
+  if (!LyricModule?.setMaxLineNum) return
   return LyricModule.setMaxLineNum(maxLineNum)
 }
 
 export const setWidth = async(width: number): Promise<void> => {
+  if (!LyricModule?.setWidth) return
   return LyricModule.setWidth(width)
 }
 
@@ -206,18 +262,27 @@ export const setWidth = async(width: number): Promise<void> => {
 // }
 
 export const setLyricTextPosition = async(textX: LX.AppSetting['desktopLyric.textPosition.x'], textY: LX.AppSetting['desktopLyric.textPosition.y']): Promise<void> => {
+  if (!LyricModule?.setLyricTextPosition) return
   return LyricModule.setLyricTextPosition(textX.toUpperCase(), textY.toUpperCase())
 }
 
 export const checkOverlayPermission = async(): Promise<void> => {
+  if (!LyricModule?.checkOverlayPermission) return
   return LyricModule.checkOverlayPermission()
 }
 
 export const openOverlayPermissionActivity = async(): Promise<void> => {
+  if (!LyricModule?.openOverlayPermissionActivity) return
   return LyricModule.openOverlayPermissionActivity()
 }
 
 export const onPositionChange = (handler: (position: { x: number, y: number }) => void): () => void => {
+  if (!LyricModule) {
+    listeners.position.add(handler)
+    return () => {
+      listeners.position.delete(handler)
+    }
+  }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const eventEmitter = new NativeEventEmitter(LyricModule)
   const eventListener = eventEmitter.addListener('set-position', event => {
@@ -230,6 +295,13 @@ export const onPositionChange = (handler: (position: { x: number, y: number }) =
 }
 
 export const onLyricLinePlay = (handler: (lineInfo: { text: string, extendedLyrics: string[] }) => void): () => void => {
+  if (!LyricModule) {
+    listeners.line.add(handler)
+    emitLyricLine()
+    return () => {
+      listeners.line.delete(handler)
+    }
+  }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const eventEmitter = new NativeEventEmitter(LyricModule)
   const eventListener = eventEmitter.addListener('lyric-line-play', event => {
@@ -240,4 +312,3 @@ export const onLyricLinePlay = (handler: (lineInfo: { text: string, extendedLyri
     eventListener.remove()
   }
 }
-

@@ -3,6 +3,7 @@ import { author, name } from '../../package.json'
 import { downloadFile, stopDownload, temporaryDirectoryPath } from '@/utils/fs'
 import { getSupportedAbis, installApk } from '@/utils/nativeModules/utils'
 import { APP_PROVIDER_NAME } from '@/config/constant'
+import { Platform, Linking } from 'react-native'
 
 const abis = [
   'arm64-v8a',
@@ -85,6 +86,10 @@ const noop = (total, download) => {}
 let apkSavePath
 
 export const downloadNewVersion = async(version, onDownload = noop) => {
+  if (Platform.OS === 'ios') {
+    await Linking.openURL(`https://github.com/${author.name}/${name}/releases/tag/v${version}`)
+    return
+  }
   const abi = await getTargetAbi()
   const url = `https://github.com/${author.name}/${name}/releases/download/v${version}/${name}-v${version}-${abi}.apk`
   let savePath = temporaryDirectoryPath + '/lx-music-mobile.apk'
@@ -118,6 +123,10 @@ export const downloadNewVersion = async(version, onDownload = noop) => {
 }
 
 export const updateApp = async() => {
+  if (Platform.OS === 'ios') {
+    await Linking.openURL(`https://github.com/${author.name}/${name}/releases`)
+    return
+  }
   if (!apkSavePath) throw new Error('apk Save Path is null')
   await installApk(apkSavePath, APP_PROVIDER_NAME)
 }

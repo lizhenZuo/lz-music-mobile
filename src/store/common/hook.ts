@@ -1,6 +1,7 @@
 import { type COMPONENT_IDS } from '@/config/constant'
 import { useEffect, useState } from 'react'
 import state, { type InitState } from './state'
+import { ensureQualityList } from '@/utils/globalState'
 
 export const useFontSize = () => {
   const [value, update] = useState(state.fontSize)
@@ -65,11 +66,15 @@ export const usePageVisible = (visibleNames: COMPONENT_IDS[], onChange: (visible
 
 
 export const useAssertApiSupport = (source: LX.Source) => {
-  const [value, update] = useState(global.lx.qualityList[source] != null || source == 'local')
+  const checkSupport = () => {
+    const qualityList = ensureQualityList()
+    return source == 'local' || qualityList[source] != null
+  }
+  const [value, update] = useState(checkSupport)
 
   useEffect(() => {
     const handleUpdate = () => {
-      update(global.lx.qualityList[source] != null || source == 'local')
+      update(checkSupport())
     }
 
     global.state_event.on('apiSourceUpdated', handleUpdate)
@@ -122,4 +127,3 @@ export const useSourceNames = () => {
 
   return value
 }
-

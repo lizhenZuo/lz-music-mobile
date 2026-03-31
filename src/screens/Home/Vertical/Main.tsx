@@ -244,6 +244,12 @@ const Main = () => {
   }, [])
 
   useEffect(() => {
+    requestAnimationFrame(() => {
+      const index = viewMap[commonState.navActiveId]
+      activeIndexRef.current = index
+      pagerViewRef.current?.setPageWithoutAnimation(index)
+    })
+
     const handleUpdate = (id: CommonState['navActiveId']) => {
       const index = viewMap[id]
       if (activeIndexRef.current == index) return
@@ -323,4 +329,3 @@ const styles = createStyle({
 
 
 export default Main
-

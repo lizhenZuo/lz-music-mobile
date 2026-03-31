@@ -1,8 +1,10 @@
 import TrackPlayer, { Capability, Event, RepeatMode, State } from 'react-native-track-player'
+import { Platform } from 'react-native'
 import BackgroundTimer from 'react-native-background-timer'
 import { playMusic as handlePlayMusic } from './playList'
 import { existsFile, moveFile, privateStorageDirectoryPath, temporaryDirectoryPath } from '@/utils/fs'
 import { toast } from '@/utils/tools'
+import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
 // import { PlayerMusicInfo } from '@/store/modules/player/playInfo'
 
 
@@ -10,11 +12,11 @@ export { useBufferProgress } from './hook'
 
 const emptyIdRxp = /\/\/default$/
 const tempIdRxp = /\/\/default$|\/\/default\/\/restorePlay$/
-export const isEmpty = (trackId = global.lx.playerTrackId) => {
+export const isEmpty = (trackId = ensureLx().playerTrackId) => {
   // console.log(trackId)
   return !trackId || emptyIdRxp.test(trackId)
 }
-export const isTempId = (trackId = global.lx.playerTrackId) => !trackId || tempIdRxp.test(trackId)
+export const isTempId = (trackId = ensureLx().playerTrackId) => !trackId || tempIdRxp.test(trackId)
 
 // export const replacePlayTrack = async(newTrack, oldTrack) => {
 //   console.log('replaceTrack')
@@ -170,6 +172,14 @@ export const setVolume = async(num: number) => TrackPlayer.setVolume(num)
 export const setPlaybackRate = async(num: number) => TrackPlayer.setRate(num)
 export const updateNowPlayingTitles = async(duration: number, title: string, artist: string, album: string) => {
   console.log('set playing titles', duration, title, artist, album)
+  if (Platform.OS === 'ios') {
+    return TrackPlayer.updateNowPlayingMetadata({
+      title,
+      artist,
+      album,
+      duration,
+    })
+  }
   return TrackPlayer.updateNowPlayingTitles(duration, title, artist, album)
 }
 
@@ -193,9 +203,10 @@ export const migratePlayerCache = async() => {
 }
 
 export const destroy = async() => {
-  if (global.lx.playerStatus.isIniting || !global.lx.playerStatus.isInitialized) return
+  const playerStatus = ensurePlayerStatus()
+  if (playerStatus.isIniting || !playerStatus.isInitialized) return
   await TrackPlayer.destroy()
-  global.lx.playerStatus.isInitialized = false
+  playerStatus.isInitialized = false
 }
 
 type PlayStatus = 'None' | 'Ready' | 'Playing' | 'Paused' | 'Stopped' | 'Buffering' | 'Connecting'

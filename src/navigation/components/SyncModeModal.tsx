@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, ScrollView } from 'react-native'
+import { Navigation } from 'react-native-navigation'
 
 import Button from '@/components/common/Button'
 import { createStyle } from '@/utils/tools'
@@ -18,7 +19,7 @@ const styles = createStyle({
     flexShrink: 1,
     marginTop: 15,
     marginLeft: 15,
-    // marginRight: 15,
+    marginRight: 15,
     marginBottom: 15,
   },
   content: {
@@ -27,31 +28,32 @@ const styles = createStyle({
   title: {
     textAlign: 'center',
     marginBottom: 10,
-    marginRight: 15,
   },
   btnGroup: {
     marginTop: 10,
   },
   btns: {
     flexDirection: 'row',
-    // justifyContent: 'center',
-    justifyContent: 'flex-start',
-    marginTop: 5,
-    marginBottom: 5,
-    // paddingBottom: 15,
-    // paddingLeft: 15,
-    // paddingRight: 15,
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    marginTop: 8,
   },
   btn: {
-    // flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 140,
+    maxWidth: '100%',
     paddingTop: 9,
     paddingBottom: 9,
     paddingLeft: 8,
     paddingRight: 8,
     alignItems: 'center',
     borderRadius: 4,
-    marginRight: 15,
-    minWidth: 100,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  btnText: {
+    textAlign: 'center',
   },
   tips: {
     paddingLeft: 15,
@@ -69,7 +71,7 @@ const styles = createStyle({
 })
 
 
-const ListModeModal = () => {
+const ListModeModal = ({ componentId }: { componentId: string }) => {
   const theme = useTheme()
   const t = useI18n()
   const [isOverwrite, setOverwrite] = useState(false)
@@ -77,6 +79,8 @@ const ListModeModal = () => {
   const handleSelectMode = (mode: LX.Sync.List.SyncMode) => {
     if (mode.startsWith('overwrite') && isOverwrite) mode += '_full'
     global.app_event.selectSyncMode({ type: 'list', mode })
+    setSyncModeComponentId('')
+    void Navigation.dismissOverlay(componentId)
   }
 
   return (
@@ -88,10 +92,10 @@ const ListModeModal = () => {
             <Text size={14}>{t('sync__mode_merge_tip')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('merge_local_remote') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_local_remote')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_local_remote')}</Text>
               </Button>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('merge_remote_local') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_remote_local')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_remote_local')}</Text>
               </Button>
             </View>
           </View>
@@ -99,10 +103,10 @@ const ListModeModal = () => {
             <Text size={14}>{t('sync__mode_overwrite_label')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('overwrite_local_remote') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_local_remote')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_local_remote')}</Text>
               </Button>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('overwrite_remote_local') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_remote_local')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_remote_local')}</Text>
               </Button>
             </View>
             <View>
@@ -113,7 +117,7 @@ const ListModeModal = () => {
             <Text size={14}>{t('sync__mode_other_label')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('cancel') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_cancel')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_cancel')}</Text>
               </Button>
             </View>
           </View>
@@ -138,11 +142,13 @@ const ListModeModal = () => {
 }
 
 
-const DislikeModeModal = () => {
+const DislikeModeModal = ({ componentId }: { componentId: string }) => {
   const theme = useTheme()
   const t = useI18n()
   const handleSelectMode = (mode: LX.Sync.Dislike.SyncMode) => {
     global.app_event.selectSyncMode({ type: 'dislike', mode })
+    setSyncModeComponentId('')
+    void Navigation.dismissOverlay(componentId)
   }
 
   return (
@@ -154,10 +160,10 @@ const DislikeModeModal = () => {
             <Text size={14}>{t('sync__mode_merge_tip')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('merge_local_remote') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_local_remote')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_local_remote')}</Text>
               </Button>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('merge_remote_local') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_remote_local')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_merge_btn_remote_local')}</Text>
               </Button>
             </View>
           </View>
@@ -165,10 +171,10 @@ const DislikeModeModal = () => {
             <Text size={14}>{t('sync__mode_overwrite_label')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('overwrite_local_remote') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_local_remote')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_local_remote')}</Text>
               </Button>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('overwrite_remote_local') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_remote_local')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_remote_local')}</Text>
               </Button>
             </View>
           </View>
@@ -176,7 +182,7 @@ const DislikeModeModal = () => {
             <Text size={14}>{t('sync__mode_other_label')}</Text>
             <View style={styles.btns}>
               <Button style={{ ...styles.btn, backgroundColor: theme['c-button-background'] }} onPress={() => { handleSelectMode('cancel') }}>
-                <Text size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_cancel')}</Text>
+                <Text style={styles.btnText} size={13} color={theme['c-button-font']}>{t('sync__mode_overwrite_btn_cancel')}</Text>
               </Button>
             </View>
           </View>
@@ -209,11 +215,10 @@ export default ({ componentId }: { componentId: string }) => {
   return (
     <ModalContent>
       {
-        syncState.type == 'list' ? <ListModeModal />
-          : syncState.type == 'dislike' ? <DislikeModeModal />
+        syncState.type == 'list' ? <ListModeModal componentId={componentId} />
+          : syncState.type == 'dislike' ? <DislikeModeModal componentId={componentId} />
             : null
       }
     </ModalContent>
   )
 }
-

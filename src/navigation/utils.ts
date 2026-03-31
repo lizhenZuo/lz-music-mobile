@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import { Navigation } from 'react-native-navigation'
 import {
   VERSION_MODAL,
@@ -8,6 +9,7 @@ import themeState from '@/store/theme/state'
 
 
 export const getStatusBarStyle = (isDark: boolean) => isDark ? 'light' : 'dark'
+export const shouldDrawBehindStatusBar = Platform.OS !== 'ios'
 
 export const dismissOverlay = async(compId: string) => Navigation.dismissOverlay(compId)
 
@@ -29,7 +31,7 @@ export const showPactModal = () => {
           interceptTouchOutside: true,
         },
         statusBar: {
-          drawBehind: true,
+          drawBehind: shouldDrawBehindStatusBar,
           visible: true,
           style: getStatusBarStyle(theme.isDark),
           backgroundColor: 'transparent',
@@ -78,7 +80,7 @@ export const showVersionModal = () => {
           interceptTouchOutside: true,
         },
         statusBar: {
-          drawBehind: true,
+          drawBehind: shouldDrawBehindStatusBar,
           visible: true,
           style: getStatusBarStyle(theme.isDark),
           backgroundColor: 'transparent',
@@ -127,7 +129,7 @@ export const showSyncModeModal = () => {
           interceptTouchOutside: true,
         },
         statusBar: {
-          drawBehind: true,
+          drawBehind: shouldDrawBehindStatusBar,
           visible: true,
           style: getStatusBarStyle(theme.isDark),
           backgroundColor: 'transparent',

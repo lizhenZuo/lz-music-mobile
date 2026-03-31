@@ -1,5 +1,6 @@
 import { stringMd5 } from 'react-native-quick-md5'
 import { decodeName } from '../index'
+import { ensureQualityList } from '@/utils/globalState'
 
 /**
  * 获取音乐音质
@@ -9,7 +10,7 @@ import { decodeName } from '../index'
 
 export const QUALITYS = ['flac24bit', 'flac', 'wav', 'ape', '320k', '192k', '128k']
 export const getMusicType = (info, type) => {
-  const list = global.lx.qualityList[info.source]
+  const list = ensureQualityList()[info.source]
   if (!list) return '128k'
   if (!list.includes(type)) type = list[list.length - 1]
   const rangeType = QUALITYS.slice(QUALITYS.indexOf(type))

@@ -38,6 +38,7 @@ export interface Props {
 
 const ANIMATION_DURATION = 200
 const PADDING = scaleSizeW(4)
+const MIN_SCALE = 0.001
 
 /**
  * Checkboxes allow the selection of multiple options from a set.
@@ -60,7 +61,7 @@ const Checkbox = ({
     : 'checkbox-marked'
 
   const { current: scaleAnim } = React.useRef<Animated.Value>(
-    new Animated.Value(checked ? 1 : 0),
+    new Animated.Value(checked ? 1 : MIN_SCALE),
   )
 
   const isFirstRendering = React.useRef<boolean>(true)
@@ -74,7 +75,7 @@ const Checkbox = ({
     }
 
     Animated.timing(scaleAnim, {
-      toValue: checked ? 1 : 0,
+      toValue: checked ? 1 : MIN_SCALE,
       duration: ANIMATION_DURATION,
       useNativeDriver: true,
     }).start()
@@ -126,4 +127,3 @@ const styles = createStyle({
 })
 
 export default Checkbox
-

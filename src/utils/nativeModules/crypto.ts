@@ -23,6 +23,7 @@ export enum AES_MODE {
 }
 
 export const generateRsaKey = async() => {
+  if (!CryptoModule?.generateRsaKey) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   const key = await CryptoModule.generateRsaKey() as { publicKey: string, privateKey: string }
   return {
@@ -32,6 +33,7 @@ export const generateRsaKey = async() => {
 }
 
 export const rsaEncrypt = async(text: string, key: string, padding: RSA_PADDING): Promise<string> => {
+  if (!CryptoModule?.rsaEncrypt) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.rsaEncrypt(text, key
     .replace(KEY_PREFIX.publicKeyStart, '')
@@ -39,6 +41,7 @@ export const rsaEncrypt = async(text: string, key: string, padding: RSA_PADDING)
 }
 
 export const rsaDecrypt = async(text: string, key: string, padding: RSA_PADDING): Promise<string> => {
+  if (!CryptoModule?.rsaDecrypt) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.rsaDecrypt(text, key
     .replace(KEY_PREFIX.privateKeyStart, '')
@@ -46,6 +49,7 @@ export const rsaDecrypt = async(text: string, key: string, padding: RSA_PADDING)
 }
 
 export const rsaEncryptSync = (text: string, key: string, padding: RSA_PADDING): string => {
+  if (!CryptoModule?.rsaEncryptSync) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.rsaEncryptSync(text, key
     .replace(KEY_PREFIX.publicKeyStart, '')
@@ -53,6 +57,7 @@ export const rsaEncryptSync = (text: string, key: string, padding: RSA_PADDING):
 }
 
 export const rsaDecryptSync = (text: string, key: string, padding: RSA_PADDING): string => {
+  if (!CryptoModule?.rsaDecryptSync) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.rsaDecryptSync(text, key
     .replace(KEY_PREFIX.privateKeyStart, '')
@@ -61,21 +66,25 @@ export const rsaDecryptSync = (text: string, key: string, padding: RSA_PADDING):
 
 
 export const aesEncrypt = async(text: string, key: string, vi: string, mode: AES_MODE): Promise<string> => {
+  if (!CryptoModule?.aesEncrypt) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.aesEncrypt(text, key, vi, mode)
 }
 
 export const aesDecrypt = async(text: string, key: string, vi: string, mode: AES_MODE): Promise<string> => {
+  if (!CryptoModule?.aesDecrypt) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.aesDecrypt(text, key, vi, mode)
 }
 
 export const aesEncryptSync = (text: string, key: string, vi: string, mode: AES_MODE): string => {
+  if (!CryptoModule?.aesEncryptSync) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.aesEncryptSync(text, key, vi, mode)
 }
 
 export const aesDecryptSync = (text: string, key: string, vi: string, mode: AES_MODE): string => {
+  if (!CryptoModule?.aesDecryptSync) throw new Error('CryptoModule is unavailable')
   // console.log(sourceFilePath, targetFilePath)
   return CryptoModule.aesDecryptSync(text, key, vi, mode)
 }

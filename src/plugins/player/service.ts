@@ -7,6 +7,7 @@ import { isTempId, isEmpty } from './utils'
 import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
 import { pause, play, playNext, playPrev } from '@/core/player/player'
+import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
 
 let isInitialized = false
 
@@ -19,7 +20,7 @@ let isInitialized = false
 
 // 销毁播放器并退出
 const handleExitApp = async(reason: string) => {
-  global.lx.isPlayedStop = false
+  ensureLx().isPlayedStop = false
   exitApp(reason)
 }
 
@@ -77,7 +78,7 @@ const registerPlaybackService = async() => {
   })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackState, async info => {
-    if (global.lx.gettingUrlId || isTempId()) return
+    if (ensureLx().gettingUrlId || isTempId()) return
     // let currentIsPlaying = false
 
     switch (info.state) {
@@ -105,16 +106,16 @@ const registerPlaybackService = async() => {
         // console.log('playback-state', info)
         break
     }
-    if (global.lx.isPlayedStop) return handleExitApp('Timeout Exit')
+    if (ensureLx().isPlayedStop) return handleExitApp('Timeout Exit')
 
     // console.log('currentIsPlaying', currentIsPlaying, global.lx.playInfo.isPlaying)
     // void updateMetaData(global.lx.store_playMusicInfo.musicInfo, currentIsPlaying)
   })
   TrackPlayer.addEventListener(TPEvent.PlaybackTrackChanged, async info => {
     // console.log('PlaybackTrackChanged====>', info)
-    global.lx.playerTrackId = await getCurrentTrackId()
+    ensureLx().playerTrackId = await getCurrentTrackId()
     if (info.track == null) return
-    if (global.lx.isPlayedStop) return handleExitApp('Timeout Exit')
+    if (ensureLx().isPlayedStop) return handleExitApp('Timeout Exit')
 
     // console.log('global.lx.playerTrackId====>', global.lx.playerTrackId)
     if (isEmpty()) {
@@ -207,8 +208,9 @@ const registerPlaybackService = async() => {
 
 
 export default () => {
-  if (global.lx.playerStatus.isRegisteredService) return
+  const playerStatus = ensurePlayerStatus()
+  if (playerStatus.isRegisteredService) return
   console.log('handle registerPlaybackService...')
   TrackPlayer.registerPlaybackService(() => registerPlaybackService)
-  global.lx.playerStatus.isRegisteredService = true
+  playerStatus.isRegisteredService = true
 }

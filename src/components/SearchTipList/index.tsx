@@ -15,11 +15,12 @@ export interface SearchTipListType<T> {
 }
 
 const noop = () => {}
+const MIN_SCALE_Y = 0.001
 
 const Component = <T extends ItemT<T>>({ onPressBg = noop, ...props }: SearchTipListProps<T>, ref: Ref<SearchTipListType<T>>) => {
   const theme = useTheme()
   const translateY = useRef(new Animated.Value(0)).current
-  const scaleY = useRef(new Animated.Value(0)).current
+  const scaleY = useRef(new Animated.Value(MIN_SCALE_Y)).current
   const [visible, setVisible] = useState(false)
   const [animatePlayed, setAnimatPlayed] = useState(true)
   const listRef = useRef<ListType<T>>(null)
@@ -49,7 +50,7 @@ const Component = <T extends ItemT<T>>({ onPressBg = noop, ...props }: SearchTip
     setAnimatPlayed(false)
     requestAnimationFrame(() => {
       translateY.setValue(-heightRef.current / 2)
-      scaleY.setValue(0)
+      scaleY.setValue(MIN_SCALE_Y)
 
       Animated.parallel([
       // Animated.timing(fade, {
@@ -87,7 +88,7 @@ const Component = <T extends ItemT<T>>({ onPressBg = noop, ...props }: SearchTip
         useNativeDriver: true,
       }),
       Animated.timing(scaleY, {
-        toValue: 0,
+        toValue: MIN_SCALE_Y,
         duration: 300,
         useNativeDriver: true,
       }),

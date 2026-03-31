@@ -7,6 +7,7 @@ import {
 } from '@/utils/data'
 import { langS2T, toNewMusicInfo, toOldMusicInfo } from '@/utils'
 import { assertApiSupport } from '@/utils/tools'
+import { ensureQualityList } from '@/utils/globalState'
 import settingState from '@/store/setting/state'
 import { requestMsg } from '@/utils/message'
 import BackgroundTimer from 'react-native-background-timer'
@@ -218,7 +219,7 @@ type TryQualityType = typeof TRY_QUALITYS_LIST[number]
 export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.MusicInfoOnline): LX.Quality => {
   let type: LX.Quality = '128k'
   if (TRY_QUALITYS_LIST.includes(highQuality as TryQualityType)) {
-    let list = global.lx.qualityList[musicInfo.source]
+    let list = ensureQualityList()[musicInfo.source]
 
     let t = TRY_QUALITYS_LIST
       .slice(TRY_QUALITYS_LIST.indexOf(highQuality as TryQualityType))
