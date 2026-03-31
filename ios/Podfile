@@ -54,6 +54,20 @@ target 'LxMusicMobile' do
     )
 
     installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        next unless build_config.name == 'Debug'
+
+        definitions = build_config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+        definitions = [definitions] unless definitions.is_a?(Array)
+
+        if target.name.start_with?('React-') || target.name == 'ReactCommon'
+          definitions << 'RCT_DEV_SETTINGS_ENABLE_PACKAGER_CONNECTION=0' unless definitions.include?('RCT_DEV_SETTINGS_ENABLE_PACKAGER_CONNECTION=0')
+          definitions << 'RCT_ENABLE_LOADING_FROM_PACKAGER=0' unless definitions.include?('RCT_ENABLE_LOADING_FROM_PACKAGER=0')
+        end
+
+        build_config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = definitions
+      end
+
       next unless ['fmt', 'Flipper-Fmt'].include?(target.name)
 
       target.build_configurations.each do |build_config|

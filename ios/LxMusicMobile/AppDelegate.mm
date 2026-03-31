@@ -3,6 +3,7 @@
 
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTBridgeModule.h>
+#import <React/RCTDevSettings.h>
 #import <React/RCTEventEmitter.h>
 #import <CommonCrypto/CommonCryptor.h>
 #import <CommonCrypto/CommonDigest.h>
@@ -482,6 +483,11 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(aesDecryptSync:(NSString *)text key:(NSSt
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
+#if DEBUG
+  if ([[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"] != nil) {
+    RCTDevSettingsSetEnabled(NO);
+  }
+#endif
   RCTBridge *bridge = [[RCTBridge alloc] initWithDelegate:self launchOptions:launchOptions];
   [ReactNativeNavigation bootstrapWithBridge:bridge];
   // You can add your custom initial props in the dictionary below.
