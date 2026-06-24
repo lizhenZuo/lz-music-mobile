@@ -562,6 +562,26 @@ export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo>
   ])
   return apiInfo
 }
+export const updateUserApi = async(id: string, script: string): Promise<LX.UserApi.UserApiInfo> => {
+  const result = /^\/\*[\S|\s]+?\*\//.exec(script)
+  if (!result) throw new Error(global.i18n.t('user_api_add_failed_tip'))
+
+  const scriptInfo = matchInfo(result[0])
+  const targetIndex = userApis.findIndex(api => api.id === id)
+  if (targetIndex < 0) throw new Error('api not found')
+
+  const prevInfo = userApis[targetIndex]
+  const apiInfo: LX.UserApi.UserApiInfo = {
+    ...prevInfo,
+    ...scriptInfo,
+  }
+  userApis.splice(targetIndex, 1, apiInfo)
+  await saveDataMultiple([
+    [userApiPrefix, userApis],
+    [`${userApiPrefix}${apiInfo.id}`, script],
+  ])
+  return apiInfo
+}
 export const removeUserApi = async(ids: string[]) => {
   if (!userApis) return []
   const _ids: string[] = []

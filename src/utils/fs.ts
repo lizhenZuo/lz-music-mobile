@@ -1,6 +1,6 @@
 import RNFS from 'react-native-fs'
 import * as pako from 'pako'
-import { Platform } from 'react-native'
+import { NativeModules, Platform } from 'react-native'
 
 export type Encoding = 'utf8' | 'base64' | 'ascii'
 export type HashAlgorithm = 'md5' | 'sha1' | 'sha224' | 'sha256' | 'sha384' | 'sha512'
@@ -32,6 +32,7 @@ export interface FileType {
 const unsupportedPickerError = () => new Error(Platform.OS === 'ios'
   ? 'System document picker is not available in the current iOS build.'
   : 'System document picker is not available in the current build.')
+const { IOSFilePickerModule } = NativeModules
 
 const toBuffer = (input: Uint8Array) => Buffer.from(input.buffer, input.byteOffset, input.byteLength)
 
@@ -72,10 +73,29 @@ export const getExternalStoragePaths = async() => {
   return Array.from(new Set(paths))
 }
 
-export const selectManagedFolder = async(_isPersist: boolean = false): Promise<SelectedPath> => Promise.reject(unsupportedPickerError())
-export const selectFile = async(_options: OpenDocumentOptions): Promise<SelectedFile> => Promise.reject(unsupportedPickerError())
-export const removeManagedFolder = async(_path: string) => Promise.resolve()
-export const getManagedFolders = async() => Promise.resolve([] as string[])
+export const selectManagedFolder = async(isPersist: boolean = false): Promise<SelectedPath> => {
+  if (Platform.OS === 'ios' && IOSFilePickerModule?.selectManagedFolder) {
+    return IOSFilePickerModule.selectManagedFolder(isPersist)
+  }
+  return Promise.reject(unsupportedPickerError())
+}
+export const selectFile = async(options: OpenDocumentOptions): Promise<SelectedFile> => {
+  if (Platform.OS === 'ios' && IOSFilePickerModule?.selectFile) {
+    return IOSFilePickerModule.selectFile(options)
+  }
+  return Promise.reject(unsupportedPickerError())
+}
+export const removeManagedFolder = async(path: string) => {
+  if (Platform.OS === 'ios' && IOSFilePickerModule?.removeManagedFolder) {
+    return IOSFilePickerModule.removeManagedFolder(path)
+  }
+}
+export const getManagedFolders = async() => {
+  if (Platform.OS === 'ios' && IOSFilePickerModule?.getManagedFolders) {
+    return IOSFilePickerModule.getManagedFolders() as Promise<string[]>
+  }
+  return [] as string[]
+}
 
 export const getPersistedUriList = async() => Promise.resolve([] as string[])
 

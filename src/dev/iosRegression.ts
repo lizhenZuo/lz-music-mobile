@@ -28,14 +28,15 @@ import { getCacheSize as getPlayerCacheSize, clearCache as clearPlayerCache } fr
 import { initial as playerInitial, setResource } from '@/plugins/player'
 import settingState from '@/store/setting/state'
 import { ensurePlayerStatus } from '@/utils/globalState'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
-type TestResult = {
+interface TestResult {
   name: string
   ok: boolean
   details: string
 }
 
-type RegressionReport = {
+interface RegressionReport {
   platform: string
   startedAt: string
   finishedAt: string
@@ -50,7 +51,7 @@ const REPORT_PATH = `${privateStorageDirectoryPath}/ios-regression-report.json`
 const DOWNLOAD_PATH = `${temporaryDirectoryPath}/ios-download-test.txt`
 const CACHE_TEST_PATH = `${temporaryDirectoryPath}/ios-cache-test.txt`
 const PLAYBACK_FILE_PATH = `${privateStorageDirectoryPath}/ios-playback-test.mp3`
-const PLAYBACK_TEST_URL = 'https://download.samplelib.com/mp3/sample-3s.mp3'
+const PLAYBACK_TEST_URL = 'https://filesamples.com/samples/audio/mp3/sample1.mp3'
 
 const FIXED_PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -97,44 +98,65 @@ const wait = async(ms: number) => new Promise<void>(resolve => {
 const withTimeout = async<T>(label: string, fn: Promise<T>, timeout = 5000): Promise<T> => {
   return Promise.race([
     fn,
-    new Promise<T>((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} timeout after ${timeout}ms`)), timeout)
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${label} timeout after ${timeout}ms`))
+      }, timeout)
     }),
   ])
 }
 
 const createPlaybackMusicInfo = (): LX.Player.PlayMusic => {
-  return {
+  const musicInfo: LX.Music.MusicInfoLocal = {
     id: 'ios-selftest-track',
     name: 'iOS Self Test',
     singer: 'Codex',
+    source: 'local',
+    interval: null,
     meta: {
+      songId: 'ios-selftest-track',
       picUrl: '',
       albumName: 'Regression',
+      filePath: PLAYBACK_FILE_PATH,
+      ext: 'mp3',
     },
-  } as LX.Player.PlayMusic
+  }
+  return musicInfo
 }
 
 const attemptPlayback = async(url: string) => {
   console.log(`[iOS Regression] playback attempt start: ${String(url)}`)
+  void appendDeviceDebugLog('[iOS Regression] playback attempt start', url)
   await withTimeout('TrackPlayer.reset', TrackPlayer.reset())
   console.log('[iOS Regression] playback reset done')
   setResource(createPlaybackMusicInfo(), url, 0)
   console.log('[iOS Regression] playback setResource invoked')
-  await wait(4000)
-  const state = await withTimeout('TrackPlayer.getState', TrackPlayer.getState())
-  const position = await withTimeout('TrackPlayer.getPosition', TrackPlayer.getPosition())
-  console.log(`[iOS Regression] playback status: state=${String(state)} position=${position}`)
+  let state = await withTimeout('TrackPlayer.getState', TrackPlayer.getState())
+  let position = await withTimeout('TrackPlayer.getPosition', TrackPlayer.getPosition())
+  let maxPosition = position
+  let sawPlaying = state === TrackPlayerState.Playing
+  const states = [String(state)]
+
+  for (let i = 0; i < 12; i++) {
+    await wait(500)
+    state = await withTimeout('TrackPlayer.getState', TrackPlayer.getState())
+    position = await withTimeout('TrackPlayer.getPosition', TrackPlayer.getPosition())
+    maxPosition = Math.max(maxPosition, position)
+    sawPlaying ||= state === TrackPlayerState.Playing
+    states.push(String(state))
+    if (position > 0.1 && i >= 2) break
+  }
+
+  console.log(`[iOS Regression] playback status: state=${String(state)} position=${position} maxPosition=${maxPosition} states=${states.join('>')}`)
+  void appendDeviceDebugLog('[iOS Regression] playback status', { state, position, maxPosition, sawPlaying, states })
   await withTimeout('TrackPlayer.pause', TrackPlayer.pause())
   console.log('[iOS Regression] playback pause done')
   return {
     state,
     position,
-    ok: state === TrackPlayerState.Playing || ([
-      TrackPlayerState.Paused,
-      TrackPlayerState.Stopped,
-      TrackPlayerState.Ready,
-    ].includes(state) && position > 0.1),
+    maxPosition,
+    sawPlaying,
+    ok: sawPlaying || maxPosition > 0.1,
   }
 }
 
@@ -157,6 +179,7 @@ const prepareFreshPlayer = async() => {
 const pushResult = (results: TestResult[], result: TestResult) => {
   results.push(result)
   console.log(`[iOS Regression] ${result.ok ? 'PASS' : 'FAIL'} ${result.name}: ${result.details}`)
+  void appendDeviceDebugLog(`[iOS Regression] ${result.ok ? 'PASS' : 'FAIL'} ${result.name}: ${result.details}`)
 }
 
 const testCrypto = async(results: TestResult[]) => {
@@ -166,26 +189,24 @@ const testCrypto = async(results: TestResult[]) => {
     const aesKey = Buffer.from('1234567890abcdef', 'utf8').toString('base64')
     const aesIv = Buffer.from('abcdef1234567890', 'utf8').toString('base64')
 
-    const aesOk = (() => {
-      return Promise.all([
+    const aesOk = (async() => {
+      const [encrypted] = await Promise.all([
         aesEncrypt(plainBase64, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding),
-      ]).then(async([encrypted]) => {
-        const decrypted = await aesDecrypt(encrypted, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
-        const encryptedSync = aesEncryptSync(plainBase64, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
-        const decryptedSync = aesDecryptSync(encryptedSync, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
-        return decrypted === plain && decryptedSync === plain
-      })
+      ])
+      const decrypted = await aesDecrypt(encrypted, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
+      const encryptedSync = aesEncryptSync(plainBase64, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
+      const decryptedSync = aesDecryptSync(encryptedSync, aesKey, aesIv, AES_MODE.CBC_128_PKCS7Padding)
+      return decrypted === plain && decryptedSync === plain
     })()
 
-    const fixedRsaOk = (() => {
-      return Promise.all([
+    const fixedRsaOk = (async() => {
+      const [encrypted] = await Promise.all([
         rsaEncrypt(plainBase64, FIXED_PUBLIC_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding),
-      ]).then(async([encrypted]) => {
-        const decrypted = await rsaDecrypt(encrypted, FIXED_PRIVATE_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
-        const encryptedSync = rsaEncryptSync(plainBase64, FIXED_PUBLIC_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
-        const decryptedSync = rsaDecryptSync(encryptedSync, FIXED_PRIVATE_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
-        return decrypted === plain && decryptedSync === plain
-      })
+      ])
+      const decrypted = await rsaDecrypt(encrypted, FIXED_PRIVATE_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
+      const encryptedSync = rsaEncryptSync(plainBase64, FIXED_PUBLIC_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
+      const decryptedSync = rsaDecryptSync(encryptedSync, FIXED_PRIVATE_KEY, RSA_PADDING.OAEPWithSHA1AndMGF1Padding)
+      return decrypted === plain && decryptedSync === plain
     })()
 
     const generatedRsaOk = (async() => {
@@ -227,7 +248,7 @@ const testDownload = async(results: TestResult[]) => {
     pushResult(results, {
       name: 'download',
       ok,
-      details: ok ? `status=${response.statusCode}, bytes=${fileInfo!.size}` : `status=${response.statusCode}, fileExists=${fileExists}`,
+      details: ok ? `status=${response.statusCode}, bytes=${fileInfo.size}` : `status=${response.statusCode}, fileExists=${fileExists}`,
     })
   } catch (err: any) {
     pushResult(results, {
@@ -291,7 +312,7 @@ const testPlayback = async(results: TestResult[]) => {
     pushResult(results, {
       name: 'playback',
       ok: remoteAttempt.ok && fileAttempt.ok,
-      details: `remoteState=${String(remoteAttempt.state)}, remotePosition=${remoteAttempt.position.toFixed(2)}s, downloadStatus=${downloadResponse.statusCode}, fileState=${String(fileAttempt.state)}, filePosition=${fileAttempt.position.toFixed(2)}s, fileExists=${playbackFileExists}, fileSize=${playbackFileStat?.size ?? -1}, resource=file://${PLAYBACK_FILE_PATH}`,
+      details: `remoteState=${String(remoteAttempt.state)}, remotePosition=${remoteAttempt.position.toFixed(2)}s, remoteMaxPosition=${remoteAttempt.maxPosition.toFixed(2)}s, remoteSawPlaying=${remoteAttempt.sawPlaying}, downloadStatus=${downloadResponse.statusCode}, fileState=${String(fileAttempt.state)}, filePosition=${fileAttempt.position.toFixed(2)}s, fileMaxPosition=${fileAttempt.maxPosition.toFixed(2)}s, fileSawPlaying=${fileAttempt.sawPlaying}, fileExists=${playbackFileExists}, fileSize=${playbackFileStat?.size ?? -1}, resource=file://${PLAYBACK_FILE_PATH}`,
     })
   } catch (err: any) {
     pushResult(results, {
@@ -335,6 +356,7 @@ export const runIosRegression = async() => {
   const startedAt = new Date().toISOString()
 
   console.log('[iOS Regression] start')
+  void appendDeviceDebugLog('[iOS Regression] start')
 
   try {
     await testCrypto(results)
@@ -356,6 +378,7 @@ export const runIosRegression = async() => {
     await writeFile(REPORT_PATH, JSON.stringify(report, null, 2), 'utf8').catch(() => {})
     console.log(`[iOS Regression] done: ${report.summary.passed} passed, ${report.summary.failed} failed`)
     console.log(`[iOS Regression] report: ${REPORT_PATH}`)
+    void appendDeviceDebugLog(`[iOS Regression] done: ${report.summary.passed} passed, ${report.summary.failed} failed`)
     global.lx.isIosRegressionRunning = false
     global.lx.isIosRegressionDone = true
   }

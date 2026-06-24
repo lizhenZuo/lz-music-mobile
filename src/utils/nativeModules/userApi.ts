@@ -1,4 +1,4 @@
-import { NativeEventEmitter, NativeModules, Platform } from 'react-native'
+import { NativeEventEmitter, NativeModules } from 'react-native'
 import { aesEncryptSync, AES_MODE, rsaEncryptSync, RSA_PADDING } from './crypto'
 import { stringMd5 } from 'react-native-quick-md5'
 
@@ -34,15 +34,55 @@ const verifyLyricInfo = (info: any) => {
 
 type ScriptResponseHandler = (err: Error | null, response: any, body: any) => void
 type ScriptAction = 'musicUrl' | 'lyric' | 'pic'
-type ScriptRequestPayload = {
+interface ScriptRequestPayload {
   source: string
   action: ScriptAction
   info: any
 }
-type ScriptRequestResult = {
+interface ScriptRequestResult {
   source: string
   action: ScriptAction
   data: any
+}
+
+const normalizeScriptResponse = (
+  action: ScriptAction,
+  payload: ScriptRequestPayload,
+  response: any,
+): ScriptRequestResult => {
+  switch (action) {
+    case 'musicUrl': {
+      if (typeof response != 'string' || response.length > 2048 || !/^https?:/.test(response)) {
+        throw new Error('failed')
+      }
+      return {
+        source: payload.source,
+        action,
+        data: {
+          type: payload.info.type,
+          url: response,
+        },
+      }
+    }
+    case 'lyric':
+      return {
+        source: payload.source,
+        action,
+        data: verifyLyricInfo(response),
+      }
+    case 'pic': {
+      if (typeof response != 'string' || response.length > 2048 || !/^https?:/.test(response)) {
+        throw new Error('failed')
+      }
+      return {
+        source: payload.source,
+        action,
+        data: response,
+      }
+    }
+    default:
+      throw new Error('Unknown action')
+  }
 }
 
 const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
@@ -139,7 +179,7 @@ const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
 
   const lx = {
     EVENT_NAMES,
-    request(url: string, { method = 'get', timeout, headers, body, binary }: any, callback: ScriptResponseHandler) {
+    request(url: string, { method = 'get', timeout, headers, body, form, formData, binary }: any, callback: ScriptResponseHandler) {
       const requestKey = Math.random().toString()
       requestQueue.set(requestKey, { callback, aborted: false })
       emit({
@@ -149,7 +189,9 @@ const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
           url,
           options: {
             method,
-            data: body,
+            body,
+            form,
+            formData,
             timeout,
             headers,
             binary: binary === true,
@@ -169,7 +211,7 @@ const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
         case EVENT_NAMES.inited: {
           if (isJsInited) throw new Error('Script is inited')
           isJsInited = true
-          const sourceInfo: any = { sources: {} }
+          const sourceInfo: any = { ...info, sources: {} }
           for (const source of allSources) {
             const userSource = data?.sources?.[source]
             if (!userSource || userSource.type !== 'music') continue
@@ -196,14 +238,15 @@ const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
       events.request = handler
     },
     utils,
-    env: Platform.OS,
-    version: process.versions.app,
+    env: 'mobile',
+    version: '2.0.0',
     currentScriptInfo: {
       name: info.name,
       description: info.description,
       version: info.version,
       author: info.author,
       homepage: info.homepage,
+      rawScript: info.script,
     },
   }
 
@@ -248,43 +291,15 @@ const createJsRuntime = (info: LX.UserApi.UserApiInfo & { script: string }) => {
   }
 
   return {
-    handleResponse(data: ResponseParams) {
+    handleResponse(data: SendResponseParams) {
       const target = requestQueue.get(data.requestKey)
       if (!target) return
       requestQueue.delete(data.requestKey)
-      if (!data.status) {
-        target.callback(new Error(data.errorMessage ?? 'failed'), null, null)
+      if (data.error != null || !data.response) {
+        target.callback(new Error(data.error ?? 'failed'), null, null)
         return
       }
-      const result = data.result as ScriptRequestResult
-      switch (result.action) {
-        case 'musicUrl':
-          target.callback(null, {
-            statusCode: 200,
-            statusMessage: 'OK',
-            headers: {},
-            body: result.data.url,
-          }, result.data.url)
-          break
-        case 'lyric':
-          target.callback(null, {
-            statusCode: 200,
-            statusMessage: 'OK',
-            headers: {},
-            body: verifyLyricInfo(result.data),
-          }, verifyLyricInfo(result.data))
-          break
-        case 'pic':
-          target.callback(null, {
-            statusCode: 200,
-            statusMessage: 'OK',
-            headers: {},
-            body: result.data,
-          }, result.data)
-          break
-        default:
-          target.callback(new Error('Unknown action'), null, null)
-      }
+      target.callback(null, data.response, data.response.body)
     },
   }
 }
@@ -326,13 +341,15 @@ export interface SendActions {
 export const sendAction = <T extends keyof SendActions>(action: T, data: SendActions[T]) => {
   if (!UserApiModule?.sendAction) {
     if (action === 'request') {
-      void jsApiRequestHandler?.(data as unknown as LX.UserApi.UserApiRequestParams).then(result => {
+      const request = data as unknown as LX.UserApi.UserApiRequestParams
+      const payload = request.data as ScriptRequestPayload
+      void jsApiRequestHandler?.(request).then(response => {
         const event: ActionsEvent = {
           action: 'response',
           data: {
             status: true,
-            requestKey: (data as unknown as LX.UserApi.UserApiRequestParams).requestKey,
-            result,
+            requestKey: request.requestKey,
+            result: normalizeScriptResponse(payload.action, payload, response),
           },
         }
         emit(event)
@@ -349,7 +366,7 @@ export const sendAction = <T extends keyof SendActions>(action: T, data: SendAct
         emit(event)
       })
     } else if (action === 'response') {
-      jsRuntime?.handleResponse(data as unknown as ResponseParams)
+      jsRuntime?.handleResponse(data as unknown as SendResponseParams)
     }
     return
   }
@@ -380,7 +397,9 @@ export interface RequestParams {
   url: string
   options: {
     method: string
-    data: any
+    body?: any
+    form?: any
+    formData?: any
     timeout: number
     headers: any
     binary: boolean

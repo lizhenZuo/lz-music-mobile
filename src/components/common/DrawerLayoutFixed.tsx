@@ -25,6 +25,7 @@ const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNav
   const iosDrawerTranslateX = useRef(new Animated.Value(0)).current
 
   const fixDrawerWidth = useCallback(() => {
+    if (Platform.OS !== 'android') return
     if (!changedRef.current.width) return
     changedRef.current.changed = true
     // console.log('usePageVisible', visible, changedRef.current.width)
@@ -78,12 +79,20 @@ const DrawerLayoutFixed = forwardRef<DrawerLayoutFixedType, Props>(({ visibleNav
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
     // console.log('handleLayout', e.nativeEvent.layout.width, changedRef.current.width)
+    const width = e.nativeEvent.layout.width
+    if (Platform.OS !== 'android') {
+      if (changedRef.current.width == width) return
+      changedRef.current.width = width
+      const wp = Math.floor(width * widthPercentage)
+      setDrawerWidth(widthPercentageMax ? Math.min(wp, widthPercentageMax) : wp)
+      return
+    }
+
     if (changedRef.current.changed) {
       // setW(e.nativeEvent.layout.width - 1)
       setW('100%')
       changedRef.current.changed = false
     } else {
-      const width = e.nativeEvent.layout.width
       if (changedRef.current.width == width) return
       changedRef.current.width = width
 

@@ -19,6 +19,10 @@ export default async(setting: LX.AppSetting) => {
 
   const handleEnded = () => {
     // setTimeout(() => {
+    if (global.lx.isPreparingPlayerTrack || global.lx.isSwitchingPlayerTrack) {
+      setStatusText('')
+      return
+    }
     if (global.lx.isPlayedStop) {
       setStatusText(global.i18n.t('player__end'))
       return

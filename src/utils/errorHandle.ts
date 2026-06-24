@@ -4,6 +4,36 @@ import { setJSExceptionHandler, setNativeExceptionHandler } from 'react-native-e
 import { log } from '@/utils/log'
 import { toast } from './tools'
 
+const enableUnhandledPromiseTracking = () => {
+  const hermesInternal = (global as typeof globalThis & {
+    HermesInternal?: {
+      enablePromiseRejectionTracker?: (options: {
+        allRejections?: boolean
+        onUnhandled?: (id: number, rejection: unknown) => void
+        onHandled?: (id: number) => void
+      }) => void
+    }
+  }).HermesInternal
+  hermesInternal?.enablePromiseRejectionTracker?.({
+    allRejections: true,
+    onUnhandled: (id, rejection) => {
+      const error = rejection instanceof Error ? rejection : null
+      const message = error
+        ? `${error.name}: ${error.message}`
+        : typeof rejection == 'string'
+          ? rejection
+          : JSON.stringify(rejection)
+      const stack = error?.stack ?? (typeof rejection == 'object' && rejection && 'stack' in rejection ? String((rejection as { stack?: unknown }).stack) : '')
+      console.log(`[UnhandledPromiseRejection][${id}]`, message, stack)
+      if (stack) log.error(stack)
+      else log.error(message)
+    },
+    onHandled: (id) => {
+      console.log(`[UnhandledPromiseRejectionHandled][${id}]`)
+    },
+  })
+}
+
 const errorHandler = (e: Error, isFatal: boolean) => {
   const excludedErrors = [
     'Failed to construct \'Response\'',
@@ -31,6 +61,8 @@ const errorHandler = (e: Error, isFatal: boolean) => {
   }
   log.error(e.stack)
 }
+
+enableUnhandledPromiseTracking()
 
 if (process.env.NODE_ENV !== 'development') {
   setJSExceptionHandler(errorHandler)

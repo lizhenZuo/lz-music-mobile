@@ -5,6 +5,7 @@ import { playMusic as handlePlayMusic } from './playList'
 import { existsFile, moveFile, privateStorageDirectoryPath, temporaryDirectoryPath } from '@/utils/fs'
 import { toast } from '@/utils/tools'
 import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
+import { normalizePlaybackTime } from './time'
 // import { PlayerMusicInfo } from '@/store/modules/player/playInfo'
 
 
@@ -157,10 +158,12 @@ export const setResource = (musicInfo: LX.Player.PlayMusic, url: string, duratio
 }
 
 export const setPlay = async() => TrackPlayer.play()
-export const getPosition = async() => TrackPlayer.getPosition()
-export const getDuration = async() => TrackPlayer.getDuration()
+export const getPosition = async() => normalizePlaybackTime(await TrackPlayer.getPosition())
+export const getDuration = async() => normalizePlaybackTime(await TrackPlayer.getDuration())
+export const getBufferedPosition = async() => normalizePlaybackTime(await TrackPlayer.getBufferedPosition())
 export const setStop = async() => {
   await TrackPlayer.stop()
+  if (Platform.OS === 'ios') return
   if (!isEmpty()) await TrackPlayer.skipToNext()
 }
 export const setLoop = async(loop: boolean) => TrackPlayer.setRepeatMode(loop ? RepeatMode.Off : RepeatMode.Track)

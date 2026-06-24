@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react'
-import { FlatList, type FlatListProps, RefreshControl, View } from 'react-native'
+import { FlatList, type FlatListProps, Platform, RefreshControl, View } from 'react-native'
 
 // import { useMusicList } from '@/store/list/hook'
 import ListItem, { ITEM_HEIGHT } from './ListItem'
@@ -13,6 +13,7 @@ import { useI18n } from '@/lang'
 import Text from '@/components/common/Text'
 import { handlePlay } from './listAction'
 import { useSettingValue } from '@/store/setting/hook'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 type FlatListType = FlatListProps<LX.Music.MusicInfoOnline>
 
@@ -153,7 +154,16 @@ const List = forwardRef<ListType, ListProps>(({
 
   const handlePress = (item: LX.Music.MusicInfoOnline, index: number) => {
     requestAnimationFrame(() => {
-      if (checkHomePagerIdle && !global.lx.homePagerIdle) return
+      if (checkHomePagerIdle && !global.lx.homePagerIdle) {
+        void appendDeviceDebugLog('[onlineList] handlePress blocked by homePagerIdle', {
+          id: item.id,
+          source: item.source,
+          index,
+          homePagerIdle: global.lx.homePagerIdle,
+          platform: Platform.OS,
+        })
+        if (Platform.OS !== 'ios') return
+      }
       if (isMultiSelectModeRef.current) {
         handleSelect(item, index)
       } else {

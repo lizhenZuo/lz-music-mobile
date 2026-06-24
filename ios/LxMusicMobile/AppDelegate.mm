@@ -5,9 +5,11 @@
 #import <React/RCTBridgeModule.h>
 #import <React/RCTDevSettings.h>
 #import <React/RCTEventEmitter.h>
+#import <React/RCTLinkingManager.h>
 #import <CommonCrypto/CommonCryptor.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
 #import <UIKit/UIKit.h>
 #include <ifaddrs.h>
@@ -103,7 +105,11 @@ RCT_REMAP_METHOD(isNotificationsEnabled,
                  isNotificationsEnabledWithResolver:(RCTPromiseResolveBlock)resolve
                  rejecter5:(RCTPromiseRejectBlock)reject) {
   [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
-    resolve(@(settings.authorizationStatus == UNAuthorizationStatusAuthorized || settings.authorizationStatus == UNAuthorizationStatusProvisional || settings.authorizationStatus == UNAuthorizationStatusEphemeral));
+    BOOL enabled = settings.authorizationStatus == UNAuthorizationStatusAuthorized || settings.authorizationStatus == UNAuthorizationStatusProvisional;
+    if (@available(iOS 14.0, *)) {
+      enabled = enabled || settings.authorizationStatus == UNAuthorizationStatusEphemeral;
+    }
+    resolve(@(enabled));
   }];
 }
 
@@ -158,6 +164,238 @@ RCT_REMAP_METHOD(requestIgnoreBatteryOptimization,
 
 @end
 
+@interface IOSFilePickerModule : NSObject <RCTBridgeModule, UIDocumentPickerDelegate>
+@end
+
+@implementation IOSFilePickerModule {
+  RCTPromiseResolveBlock _resolve;
+  RCTPromiseRejectBlock _reject;
+  NSString *_toPath;
+  NSString *_encoding;
+  BOOL _pickingDirectory;
+  BOOL _persistDirectory;
+  NSMutableSet<NSString *> *_activeSecurityScopedPaths;
+}
+
+RCT_EXPORT_MODULE();
+
++ (BOOL)requiresMainQueueSetup {
+  return YES;
+}
+
+- (instancetype)init {
+  if (self = [super init]) {
+    _activeSecurityScopedPaths = [NSMutableSet set];
+  }
+  return self;
+}
+
+- (UIViewController *)topViewController {
+  UIViewController *root = UIApplication.sharedApplication.delegate.window.rootViewController;
+  while (root.presentedViewController != nil) root = root.presentedViewController;
+  return root;
+}
+
+- (NSDictionary *)fileInfoForURL:(NSURL *)url isDirectory:(BOOL)isDirectory data:(NSString *)data {
+  NSNumber *fileSize = @0;
+  NSNumber *modifiedAt = @0;
+  NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:url.path error:nil];
+  if (attrs != nil) {
+    fileSize = attrs[NSFileSize] ?: @0;
+    NSDate *mtime = attrs[NSFileModificationDate];
+    if (mtime != nil) modifiedAt = @((long long)(mtime.timeIntervalSince1970 * 1000));
+  }
+  return @{
+    @"path": url.path ?: @"",
+    @"name": url.lastPathComponent ?: @"",
+    @"size": fileSize,
+    @"canRead": @YES,
+    @"canWrite": @YES,
+    @"isDirectory": @(isDirectory),
+    @"isFile": @(!isDirectory),
+    @"mtime": modifiedAt,
+    @"ctime": modifiedAt,
+    @"lastModified": modifiedAt,
+    @"mimeType": @"",
+    @"data": data ?: url.path ?: @"",
+  };
+}
+
+- (NSArray<NSString *> *)documentTypesForExtensions:(NSArray *)extensions {
+  if (extensions.count == 0) return @[ @"public.data", @"public.audio", @"public.text" ];
+  NSMutableArray<NSString *> *types = [NSMutableArray array];
+  for (NSString *ext in extensions) {
+    NSString *cleanExt = [[ext stringByReplacingOccurrencesOfString:@"." withString:@""] lowercaseString];
+    if (cleanExt.length == 0) continue;
+    if ([cleanExt isEqualToString:@"mp3"]) [types addObject:@"public.mp3"];
+    else if ([cleanExt isEqualToString:@"wav"]) [types addObject:@"com.microsoft.waveform-audio"];
+    else if ([cleanExt isEqualToString:@"ogg"]) [types addObject:@"org.xiph.ogg"];
+    else if ([cleanExt isEqualToString:@"flac"]) [types addObject:@"org.xiph.flac"];
+    else if ([cleanExt isEqualToString:@"json"]) [types addObject:@"public.json"];
+    else if ([cleanExt isEqualToString:@"js"]) [types addObject:@"com.netscape.javascript-source"];
+    else [types addObject:@"public.data"];
+  }
+  return types.count ? types : @[ @"public.data" ];
+}
+
+- (NSArray<UTType *> *)contentTypesForExtensions:(NSArray *)extensions API_AVAILABLE(ios(14.0)) {
+  if (extensions.count == 0) return @[ UTTypeData, UTTypeAudio, UTTypeText ];
+  NSMutableArray<UTType *> *types = [NSMutableArray array];
+  for (NSString *ext in extensions) {
+    NSString *cleanExt = [[ext stringByReplacingOccurrencesOfString:@"." withString:@""] lowercaseString];
+    if (cleanExt.length == 0) continue;
+    UTType *type = [UTType typeWithFilenameExtension:cleanExt];
+    if (type != nil) [types addObject:type];
+  }
+  return types.count ? types : @[ UTTypeData ];
+}
+
+- (void)presentPicker:(UIDocumentPickerViewController *)picker {
+  picker.delegate = self;
+  picker.modalPresentationStyle = UIModalPresentationFormSheet;
+  [[self topViewController] presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)rejectIfBusy:(RCTPromiseRejectBlock)reject {
+  reject(@"busy", @"A document picker is already open.", nil);
+}
+
+RCT_REMAP_METHOD(selectFile,
+                 selectFileWithOptions:(NSDictionary *)options
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (self->_resolve != nil) {
+      [self rejectIfBusy:reject];
+      return;
+    }
+    self->_resolve = resolve;
+    self->_reject = reject;
+    self->_toPath = [options[@"toPath"] isKindOfClass:NSString.class] ? options[@"toPath"] : nil;
+    self->_encoding = [options[@"encoding"] isKindOfClass:NSString.class] ? options[@"encoding"] : @"utf8";
+    self->_pickingDirectory = NO;
+    self->_persistDirectory = NO;
+    NSArray *extensions = [options[@"extTypes"] isKindOfClass:NSArray.class] ? options[@"extTypes"] : @[];
+    UIDocumentPickerViewController *picker;
+    if (@available(iOS 14.0, *)) {
+      picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:[self contentTypesForExtensions:extensions] asCopy:YES];
+    } else {
+      picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:[self documentTypesForExtensions:extensions] inMode:UIDocumentPickerModeImport];
+    }
+    [self presentPicker:picker];
+  });
+}
+
+RCT_REMAP_METHOD(selectManagedFolder,
+                 selectManagedFolderWithPersist:(BOOL)persist
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (self->_resolve != nil) {
+      [self rejectIfBusy:reject];
+      return;
+    }
+    self->_resolve = resolve;
+    self->_reject = reject;
+    self->_toPath = nil;
+    self->_encoding = @"utf8";
+    self->_pickingDirectory = YES;
+    self->_persistDirectory = persist;
+    UIDocumentPickerViewController *picker;
+    if (@available(iOS 14.0, *)) {
+      picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeFolder ] asCopy:NO];
+    } else {
+      picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[ @"public.folder" ] inMode:UIDocumentPickerModeOpen];
+    }
+    [self presentPicker:picker];
+  });
+}
+
+RCT_REMAP_METHOD(getManagedFolders,
+                 getManagedFoldersWithResolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject) {
+  NSArray<NSString *> *savedPaths = [[NSUserDefaults standardUserDefaults] arrayForKey:@"LXManagedFolderPaths"] ?: @[];
+  NSMutableArray<NSString *> *paths = [NSMutableArray array];
+  for (NSString *path in savedPaths) {
+    if (![path isKindOfClass:NSString.class] || path.length == 0) continue;
+    [paths addObject:path];
+  }
+  resolve(paths);
+}
+
+RCT_REMAP_METHOD(removeManagedFolder,
+                 removeManagedFolderWithPath:(NSString *)path
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject) {
+  NSArray<NSString *> *savedPaths = [[NSUserDefaults standardUserDefaults] arrayForKey:@"LXManagedFolderPaths"] ?: @[];
+  NSMutableArray<NSString *> *nextPaths = [NSMutableArray array];
+  for (NSString *savedPath in savedPaths) {
+    if ([savedPath isEqualToString:path]) {
+      [_activeSecurityScopedPaths removeObject:savedPath];
+    } else {
+      [nextPaths addObject:savedPath];
+    }
+  }
+  [[NSUserDefaults standardUserDefaults] setObject:nextPaths forKey:@"LXManagedFolderPaths"];
+  resolve(nil);
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+  if (_resolve != nil) _resolve((id)kCFNull);
+  _resolve = nil;
+  _reject = nil;
+  _toPath = nil;
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+  NSURL *url = urls.firstObject;
+  if (url == nil) {
+    if (_reject != nil) _reject(@"empty", @"No document selected.", nil);
+    _resolve = nil;
+    _reject = nil;
+    _toPath = nil;
+    return;
+  }
+
+  BOOL scoped = [url startAccessingSecurityScopedResource];
+  if (scoped) [_activeSecurityScopedPaths addObject:url.path];
+  NSError *error = nil;
+  if (_pickingDirectory) {
+    if (_persistDirectory) {
+      NSMutableArray<NSString *> *paths = [[[NSUserDefaults standardUserDefaults] arrayForKey:@"LXManagedFolderPaths"] mutableCopy] ?: [NSMutableArray array];
+      if (![paths containsObject:url.path]) {
+        [paths addObject:url.path];
+        [[NSUserDefaults standardUserDefaults] setObject:paths forKey:@"LXManagedFolderPaths"];
+      }
+    }
+    if (_resolve != nil) _resolve([self fileInfoForURL:url isDirectory:YES data:url.path]);
+  } else if (_toPath.length > 0) {
+    [[NSFileManager defaultManager] createDirectoryAtPath:_toPath withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *targetPath = [_toPath stringByAppendingPathComponent:url.lastPathComponent ?: @"selected-file"];
+    NSURL *targetURL = [NSURL fileURLWithPath:targetPath];
+    [[NSFileManager defaultManager] removeItemAtURL:targetURL error:nil];
+    if (![[NSFileManager defaultManager] copyItemAtURL:url toURL:targetURL error:&error]) {
+      if (_reject != nil) _reject(@"copy_failed", error.localizedDescription ?: @"Copy selected document failed.", error);
+    } else if (_resolve != nil) {
+      _resolve([self fileInfoForURL:targetURL isDirectory:NO data:targetPath]);
+    }
+  } else {
+    NSStringEncoding encoding = [_encoding isEqualToString:@"ascii"] ? NSASCIIStringEncoding : NSUTF8StringEncoding;
+    NSString *data = [NSString stringWithContentsOfURL:url encoding:encoding error:&error];
+    if (data == nil) {
+      if (_reject != nil) _reject(@"read_failed", error.localizedDescription ?: @"Read selected document failed.", error);
+    } else if (_resolve != nil) {
+      _resolve([self fileInfoForURL:url isDirectory:NO data:data]);
+    }
+  }
+
+  _resolve = nil;
+  _reject = nil;
+  _toPath = nil;
+}
+
+@end
+
 @interface CacheModule : NSObject <RCTBridgeModule>
 @end
 
@@ -185,9 +423,12 @@ RCT_REMAP_METHOD(getAppCacheSize,
 RCT_REMAP_METHOD(clearAppCache,
                  clearAppCacheWithResolver:(RCTPromiseResolveBlock)resolve
                  rejecter2:(RCTPromiseRejectBlock)reject) {
+  [[NSURLCache sharedURLCache] removeAllCachedResponses];
   NSString *cachePath = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
   NSArray *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:cachePath error:nil];
+  NSString *urlCacheDirectory = [[NSBundle mainBundle] bundleIdentifier];
   for (NSString *entry in contents) {
+    if ([entry isEqualToString:urlCacheDirectory]) continue;
     [[NSFileManager defaultManager] removeItemAtPath:[cachePath stringByAppendingPathComponent:entry] error:nil];
   }
   resolve(nil);
@@ -427,6 +668,25 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(rsaDecryptSync:(NSString *)text key:(NSSt
   return [self rsaDecryptValue:text key:key padding:padding];
 }
 
+RCT_REMAP_METHOD(sha1,
+                 sha1WithInput:(NSString *)input
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecterSha1:(RCTPromiseRejectBlock)reject) {
+  NSData *data = [input dataUsingEncoding:NSUTF8StringEncoding];
+  if (data == nil) {
+    reject(@"SHA1_ERROR", @"哈希计算失败", nil);
+    return;
+  }
+
+  unsigned char digest[CC_SHA1_DIGEST_LENGTH];
+  CC_SHA1(data.bytes, (CC_LONG)data.length, digest);
+  NSMutableString *hash = [NSMutableString stringWithCapacity:CC_SHA1_DIGEST_LENGTH * 2];
+  for (int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) {
+    [hash appendFormat:@"%02x", digest[i]];
+  }
+  resolve(hash);
+}
+
 - (NSString *)aesOperation:(CCOperation)operation text:(NSString *)text key:(NSString *)key iv:(NSString *)iv mode:(NSString *)mode {
   NSData *data = [self dataFromBase64:text];
   NSData *keyData = [self dataFromBase64:key];
@@ -516,6 +776,20 @@ RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(aesDecryptSync:(NSString *)text key:(NSSt
 #else
   return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
 #endif
+}
+
+- (BOOL)application:(UIApplication *)application
+            openURL:(NSURL *)url
+            options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options
+{
+  return [RCTLinkingManager application:application openURL:url options:options];
+}
+
+- (BOOL)application:(UIApplication *)application
+continueUserActivity:(NSUserActivity *)userActivity
+ restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler
+{
+  return [RCTLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
 }
 
 @end

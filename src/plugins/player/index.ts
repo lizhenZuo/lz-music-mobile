@@ -65,6 +65,7 @@ export {
   setStop,
   resetPlay,
   getPosition,
+  getBufferedPosition,
   updateMetaData,
   onStateChange,
   isEmpty,

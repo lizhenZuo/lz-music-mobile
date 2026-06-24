@@ -1,4 +1,4 @@
-import { isInitialized, initial as playerInitial, isEmpty, setPause, setPlay, setResource, setStop, initTrackInfo } from '@/plugins/player'
+import { isInitialized, initial as playerInitial, isEmpty, setPause, setPlay, setResource, setStop, initTrackInfo, getPosition, getDuration, resetPlay } from '@/plugins/player'
 import {
   setStatusText,
 } from '@/core/player/playStatus'
@@ -28,6 +28,10 @@ import { checkIgnoringBatteryOptimization, checkNotificationPermission, debounce
 import { LIST_IDS } from '@/config/constant'
 import { addListMusics, removeListMusics } from '@/core/list'
 import { addDislikeInfo } from '@/core/dislikeList'
+import { log } from '@/utils/log'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
+import { setApiSource } from '@/core/apiSource'
+import { state as userApiState } from '@/store/userApi'
 
 // import { checkMusicFileAvailable } from '@renderer/utils/music'
 
@@ -72,13 +76,13 @@ const diffCurrentMusicInfo = (curMusicInfo: LX.Music.MusicInfo | LX.Download.Lis
 }
 
 let cancelDelayRetry: (() => void) | null = null
-const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false): Promise<string | null> => {
+const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false, triedApiSourceIds: string[] = []): Promise<string | null> => {
   // if (cancelDelayRetry) cancelDelayRetry()
   return new Promise<string | null>((resolve, reject) => {
     const time = getRandom(2, 6)
     setStatusText(global.i18n.t('player__getting_url_delay_retry', { time }))
     const tiemout = setTimeout(() => {
-      getMusicPlayUrl(musicInfo, isRefresh, true).then((result) => {
+      getMusicPlayUrl(musicInfo, isRefresh, true, triedApiSourceIds).then((result) => {
         cancelDelayRetry = null
         resolve(result)
       }).catch(async(err: any) => {
@@ -93,10 +97,80 @@ const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, i
     }
   })
 }
-const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false, isRetryed = false): Promise<string | null> => {
+
+const getNextUserApiSource = (triedApiSourceIds: string[]) => {
+  const userApiList = userApiState.list.filter(api => /^user_api/.test(api.id))
+  if (userApiList.length < 2) return null
+
+  const currentApiSource = settingState.setting['common.apiSource']
+  const currentIndex = userApiList.findIndex(api => api.id == currentApiSource)
+  const startIndex = currentIndex < 0 ? -1 : currentIndex
+  for (let offset = 1; offset <= userApiList.length; offset++) {
+    const api = userApiList[(startIndex + offset) % userApiList.length]
+    if (!triedApiSourceIds.includes(api.id)) return api
+  }
+
+  return null
+}
+
+const waitForApiSourceInit = async(apiId: string) => {
+  for (let i = 0; i < 20; i++) {
+    if (settingState.setting['common.apiSource'] == apiId && !global.lx.apiInitPromise[1]) break
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
+  const initOk = await global.lx.apiInitPromise[0].catch(() => false)
+  return initOk && settingState.setting['common.apiSource'] == apiId
+}
+
+const switchToNextUserApiSource = async(triedApiSourceIds: string[]) => {
+  const currentApiSource = settingState.setting['common.apiSource']
+  if (!/^user_api/.test(currentApiSource)) return false
+  if (!triedApiSourceIds.includes(currentApiSource)) triedApiSourceIds.push(currentApiSource)
+
+  let nextApi = getNextUserApiSource(triedApiSourceIds)
+  while (nextApi) {
+    setStatusText(`Try switching music API: ${nextApi.name}`)
+    log.info('[player] switch user api source', {
+      from: settingState.setting['common.apiSource'],
+      to: nextApi.id,
+      name: nextApi.name,
+    })
+    void appendDeviceDebugLog('[player] switch user api source', {
+      from: settingState.setting['common.apiSource'],
+      to: nextApi.id,
+      name: nextApi.name,
+    })
+    setApiSource(nextApi.id)
+
+    if (await waitForApiSourceInit(nextApi.id)) return true
+
+    if (!triedApiSourceIds.includes(nextApi.id)) triedApiSourceIds.push(nextApi.id)
+    nextApi = getNextUserApiSource(triedApiSourceIds)
+  }
+
+  return false
+}
+
+const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false, isRetryed = false, triedApiSourceIds: string[] = []): Promise<string | null> => {
   // this.musicInfo.url = await getMusicPlayUrl(targetSong, type)
   setStatusText(global.i18n.t('player__getting_url'))
   addLoadTimeout()
+  log.info('[player] getMusicPlayUrl start', {
+    id: musicInfo.id,
+    source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+    isRefresh,
+    isRetryed,
+    apiSource: settingState.setting['common.apiSource'],
+    apiInitReady: global.lx.apiInitPromise[1],
+  })
+  void appendDeviceDebugLog('[player] getMusicPlayUrl start', {
+    id: musicInfo.id,
+    source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+    isRefresh,
+    isRetryed,
+    apiSource: settingState.setting['common.apiSource'],
+  })
 
   // const type = getPlayType(settingState.setting['player.isPlayHighQuality'], musicInfo)
   let toggleMusicInfo = ('progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo).meta.toggleMusicInfo
@@ -116,17 +190,45 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
     })
   }).then(url => {
     if (global.lx.isPlayedStop || diffCurrentMusicInfo(musicInfo)) return null
+    log.info('[player] getMusicPlayUrl success', {
+      id: musicInfo.id,
+      source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+      url: typeof url == 'string' ? url.slice(0, 180) : url,
+    })
+    void appendDeviceDebugLog('[player] getMusicPlayUrl success', {
+      id: musicInfo.id,
+      source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+      url: typeof url == 'string' ? url.slice(0, 180) : url,
+    })
 
     return url
   }).catch(async err => {
+    log.info('[player] getMusicPlayUrl failed', {
+      id: musicInfo.id,
+      source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+      isRefresh,
+      isRetryed,
+      message: err?.message,
+    })
+    void appendDeviceDebugLog('[player] getMusicPlayUrl failed', {
+      id: musicInfo.id,
+      source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+      isRefresh,
+      isRetryed,
+      message: err?.message,
+    })
     // console.log('err', err.message)
     if (global.lx.isPlayedStop ||
       diffCurrentMusicInfo(musicInfo) ||
       err.message == requestMsg.cancelRequest) return null
 
-    if (err.message == requestMsg.tooManyRequests) return delayRetry(musicInfo, isRefresh)
+    if (err.message == requestMsg.tooManyRequests) return delayRetry(musicInfo, isRefresh, triedApiSourceIds)
 
-    if (!isRetryed) return getMusicPlayUrl(musicInfo, isRefresh, true)
+    if (!isRetryed) return getMusicPlayUrl(musicInfo, isRefresh, true, triedApiSourceIds)
+
+    if (await switchToNextUserApiSource(triedApiSourceIds)) {
+      return getMusicPlayUrl(musicInfo, isRefresh, false, triedApiSourceIds)
+    }
 
     throw err
   })
@@ -134,6 +236,20 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
 
 export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh?: boolean) => {
   // addLoadTimeout()
+  log.info('[player] setMusicUrl called', {
+    id: musicInfo.id,
+    source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+    isRefresh: !!isRefresh,
+    currentId: playerState.playMusicInfo.musicInfo?.id,
+    isPlay: playerState.isPlay,
+  })
+  void appendDeviceDebugLog('[player] setMusicUrl called', {
+    id: musicInfo.id,
+    source: 'progress' in musicInfo ? musicInfo.metadata.musicInfo.source : musicInfo.source,
+    isRefresh: !!isRefresh,
+    currentId: playerState.playMusicInfo.musicInfo?.id,
+    isPlay: playerState.isPlay,
+  })
   if (!diffCurrentMusicInfo(musicInfo)) return
   if (cancelDelayRetry) cancelDelayRetry()
   global.lx.gettingUrlId = createGettingUrlId(musicInfo)
@@ -174,6 +290,8 @@ const handleRestorePlay = async(restorePlayInfo: LX.Player.SavedPlayInfo) => {
     ) return
     setMusicInfo({ pic: url })
     global.app_event.picUpdated()
+  }).catch((err) => {
+    console.log(err)
   })
 
   void getLyricInfo({ musicInfo }).then((lyricInfo) => {
@@ -227,6 +345,19 @@ const debouncePlay = debounceBackgroundTimer((musicInfo: LX.Player.PlayMusic) =>
 
 // 处理音乐播放
 const handlePlay = async() => {
+  log.info('[player] handlePlay enter', {
+    initialized: isInitialized(),
+    currentId: playerState.playMusicInfo.musicInfo?.id,
+    listId: playerState.playMusicInfo.listId,
+    isTempPlay: playerState.playMusicInfo.isTempPlay,
+    apiSource: settingState.setting['common.apiSource'],
+  })
+  void appendDeviceDebugLog('[player] handlePlay enter', {
+    initialized: isInitialized(),
+    currentId: playerState.playMusicInfo.musicInfo?.id,
+    listId: playerState.playMusicInfo.listId,
+    isTempPlay: playerState.playMusicInfo.isTempPlay,
+  })
   if (!isInitialized()) {
     await checkNotificationPermission()
     void checkIgnoringBatteryOptimization()
@@ -252,6 +383,11 @@ const handlePlay = async() => {
   const musicInfo = playMusicInfo.musicInfo
 
   if (!musicInfo) return
+
+  global.lx.isPreparingPlayerTrack = true
+  setTimeout(() => {
+    global.lx.isPreparingPlayerTrack = false
+  }, 1500)
 
   await setStop()
   global.app_event.pause()
@@ -287,6 +423,8 @@ export const playListById = async(listId: string, id: string) => {
  * @param index 播放的歌曲位置
  */
 export const playList = async(listId: string, index: number) => {
+  log.info('[player] playList called', { listId, index })
+  void appendDeviceDebugLog('[player] playList called', { listId, index })
   const prevListId = playerState.playInfo.playerListId
   setPlayListId(listId)
   setPlayMusicInfo(listId, getList(listId)[index])
@@ -594,13 +732,26 @@ export const playPrev = async(isAutoToggle = false): Promise<void> => {
 /**
  * 恢复播放
  */
+const isPlaybackAtEnd = async() => {
+  const [position, duration] = await Promise.all([getPosition(), getDuration()])
+  return duration > 0 && position >= duration - 1
+}
+
 export const play = () => {
   if (playerState.playMusicInfo.musicInfo == null) return
   if (isEmpty()) {
     if (createGettingUrlId(playerState.playMusicInfo.musicInfo) != global.lx.gettingUrlId) setMusicUrl(playerState.playMusicInfo.musicInfo)
     return
   }
-  void setPlay()
+  void isPlaybackAtEnd().then(async(isAtEnd) => {
+    if (isAtEnd) {
+      void appendDeviceDebugLog('[player] replay from end')
+      await resetPlay()
+    }
+    await setPlay()
+  }).catch(async() => {
+    await setPlay()
+  })
 }
 
 /**
@@ -665,4 +816,3 @@ export const dislikeMusic = async() => {
   await addDislikeInfo([{ name: minfo.name, singer: minfo.singer }])
   await playNext(true)
 }
-

@@ -16,17 +16,33 @@ import { bootLog } from '@/utils/bootLog'
 import { cheatTip } from '@/utils/tools'
 
 let isFirstPush = true
+const shouldSuppressNonCriticalModals = () => Boolean((global as typeof globalThis & {
+  __LX_SUPPRESS_NON_CRITICAL_MODALS__?: boolean
+}).__LX_SUPPRESS_NON_CRITICAL_MODALS__)
+
 const handlePushedHomeScreen = async() => {
   await cheatTip()
   if (settingState.setting['common.isAgreePact']) {
     if (isFirstPush) {
       isFirstPush = false
-      void checkUpdate()
-      void initDeeplink()
+      if (!shouldSuppressNonCriticalModals()) {
+        void checkUpdate().catch((err) => {
+          console.log('[init] checkUpdate failed', err)
+        })
+      }
+      void initDeeplink().catch((err) => {
+        console.log('[init] initDeeplink failed', err)
+      })
     }
   } else {
     if (isFirstPush) isFirstPush = false
-    showPactModal()
+    if (shouldSuppressNonCriticalModals()) {
+      void initDeeplink().catch((err) => {
+        console.log('[init] initDeeplink failed', err)
+      })
+    } else {
+      showPactModal()
+    }
   }
 }
 

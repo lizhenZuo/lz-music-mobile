@@ -3,8 +3,75 @@ import { log, setUserApiList, setUserApiStatus } from '@/core/userApi'
 import settingState from '@/store/setting/state'
 import BackgroundTimer from 'react-native-background-timer'
 import { fetchData } from './request'
-import { getUserApiList } from '@/utils/data'
+import { addUserApi, getUserApiList, getUserApiScript, updateUserApi } from '@/utils/data'
 import { confirmDialog, openUrl, tipDialog } from '@/utils/tools'
+import { httpFetch } from '@/utils/request'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
+import { builtinUserApiUrls } from './builtinSources'
+
+
+const parseUserApiMeta = (script: string) => {
+  const result = /^\/\*[\S|\s]+?\*\//.exec(script)
+  if (!result) return null
+
+  const infoArr = result[0].split(/\r?\n/)
+  const rxp = /^\s?\*\s?@(\w+)\s(.+)$/
+  const info: Partial<Record<'name' | 'author' | 'homepage', string>> = {}
+  for (const item of infoArr) {
+    const matched = rxp.exec(item)
+    if (!matched) continue
+    const key = matched[1]
+    if (key !== 'name' && key !== 'author' && key !== 'homepage') continue
+    info[key] = matched[2].trim()
+  }
+
+  return info
+}
+
+const ensureBuiltinUserApis = async() => {
+  const currentList = await getUserApiList()
+  const currentScripts = await Promise.all(currentList.map(async api => ({
+    info: api,
+    script: await getUserApiScript(api.id),
+  })))
+
+  for (const url of builtinUserApiUrls) {
+    let script: string
+    try {
+      script = await httpFetch(url).promise.then(resp => resp.body) as string
+    } catch (err) {
+      log.warn('[userApi] builtin import skipped', url, err)
+      continue
+    }
+
+    const meta = parseUserApiMeta(script)
+    const matchedScript = currentScripts.find(({ info, script: currentScript }) => {
+      if (currentScript === script) return true
+      if (!meta) return false
+      if (meta.homepage && info.homepage === meta.homepage) return true
+      if (meta.name && meta.author) return info.name === meta.name && info.author === meta.author
+      return Boolean(meta.name && info.name === meta.name)
+    })
+    if (matchedScript) {
+      if (matchedScript.script === script) continue
+      try {
+        const info = await updateUserApi(matchedScript.info.id, script)
+        matchedScript.info = info
+        matchedScript.script = script
+      } catch (err) {
+        log.warn('[userApi] builtin update failed', url, err)
+      }
+      continue
+    }
+
+    try {
+      const info = await addUserApi(script)
+      currentScripts.push({ info, script })
+    } catch (err) {
+      log.warn('[userApi] builtin add failed', url, err)
+    }
+  }
+}
 
 
 export default async(setting: LX.AppSetting) => {
@@ -38,6 +105,17 @@ export default async(setting: LX.AppSetting) => {
     scriptRequestMap.set(requestKey, req)
   }
   const sendUserApiRequest = async(data: LX.UserApi.UserApiRequestParams) => {
+    const requestInfo = {
+      requestKey: data.requestKey,
+      apiSource: settingState.setting['common.apiSource'],
+      source: data.data?.source,
+      action: data.data?.action,
+      type: data.data?.info?.type,
+      musicId: data.data?.info?.musicInfo?.id,
+      songmid: data.data?.info?.musicInfo?.songmid,
+    }
+    log.info('[userApi] send request', requestInfo)
+    void appendDeviceDebugLog('[userApi] send request', requestInfo)
     const handleApiUpdate = () => {
       const target = userApiRequestMap.get(data.requestKey)
       if (!target) return
@@ -64,6 +142,16 @@ export default async(setting: LX.AppSetting) => {
     return requestPromise
   }
   const handleUserApiResponse = ({ status, result, requestKey, errorMessage }: ResponseParams) => {
+    const responseInfo = {
+      requestKey,
+      status,
+      errorMessage,
+      action: result?.action,
+      source: result?.source,
+      url: typeof result?.data?.url == 'string' ? result.data.url.slice(0, 180) : result?.data,
+    }
+    log.info('[userApi] request response', responseInfo)
+    void appendDeviceDebugLog('[userApi] request response', responseInfo)
     const target = userApiRequestMap.get(requestKey)
     if (!target) return
     userApiRequestMap.delete(requestKey)
@@ -71,7 +159,23 @@ export default async(setting: LX.AppSetting) => {
     if (status) target.resolve(result)
     else target.reject(new Error(errorMessage ?? 'failed'))
   }
+  const syncApiInitPromise = (status: boolean) => {
+    if (!global.lx.apiInitPromise[1]) {
+      global.lx.apiInitPromise[2](status)
+    } else {
+      global.lx.apiInitPromise[0] = Promise.resolve(status)
+    }
+  }
   const handleStateChange = ({ status, errorMessage, info }: InitParams) => {
+    const initInfo = {
+      status,
+      errorMessage,
+      id: info?.id,
+      name: info?.name,
+      sources: info?.sources ? Object.keys(info.sources) : [],
+    }
+    log.info('[userApi] init state', initInfo)
+    void appendDeviceDebugLog('[userApi] init state', initInfo)
     if (!info || info.id !== settingState.setting['common.apiSource']) return
     // 只允许当前选中的自定义源更新状态，避免旧源异步结果覆盖新选择
     setUserApiStatus(status, errorMessage)
@@ -179,7 +283,7 @@ export default async(setting: LX.AppSetting) => {
         global.state_event.apiSourceUpdated(settingState.setting['common.apiSource'])
       }
     } else {
-      if (errorMessage) {
+      if (errorMessage && !(global as typeof globalThis & { __LX_SUPPRESS_NON_CRITICAL_MODALS__?: boolean }).__LX_SUPPRESS_NON_CRITICAL_MODALS__) {
         void tipDialog({
           message: `${global.i18n.t('user_api__init_failed_alert', { name: info.name })}\n${errorMessage}`,
           // selection: true,
@@ -187,9 +291,10 @@ export default async(setting: LX.AppSetting) => {
         })
       }
     }
-    if (!global.lx.apiInitPromise[1]) global.lx.apiInitPromise[2](status)
+    syncApiInitPromise(status)
   }
   const showUpdateAlert = ({ name, log, updateUrl }: UpdateInfoParams) => {
+    if ((global as typeof globalThis & { __LX_SUPPRESS_NON_CRITICAL_MODALS__?: boolean }).__LX_SUPPRESS_NON_CRITICAL_MODALS__) return
     if (updateUrl) {
       void confirmDialog({
         message: `${global.i18n.t('user_api_update_alert', { name })}\n${log}`,
@@ -252,5 +357,6 @@ export default async(setting: LX.AppSetting) => {
     }
   })
 
+  await ensureBuiltinUserApis()
   setUserApiList(await getUserApiList())
 }

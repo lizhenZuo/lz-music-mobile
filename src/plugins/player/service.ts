@@ -8,6 +8,7 @@ import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
 import { pause, play, playNext, playPrev } from '@/core/player/player'
 import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 let isInitialized = false
 
@@ -69,6 +70,7 @@ const registerPlaybackService = async() => {
 
   TrackPlayer.addEventListener(TPEvent.PlaybackError, async(err: any) => {
     console.log('playback-error', err)
+    void appendDeviceDebugLog('[TrackPlayer] playback-error', err)
     global.app_event.error()
     global.app_event.playerError()
   })
@@ -78,6 +80,7 @@ const registerPlaybackService = async() => {
   })
 
   TrackPlayer.addEventListener(TPEvent.PlaybackState, async info => {
+    void appendDeviceDebugLog('[TrackPlayer] state', info)
     if (ensureLx().gettingUrlId || isTempId()) return
     // let currentIsPlaying = false
 
@@ -114,8 +117,14 @@ const registerPlaybackService = async() => {
   TrackPlayer.addEventListener(TPEvent.PlaybackTrackChanged, async info => {
     // console.log('PlaybackTrackChanged====>', info)
     ensureLx().playerTrackId = await getCurrentTrackId()
+    void appendDeviceDebugLog('[TrackPlayer] track-changed', {
+      info,
+      playerTrackId: ensureLx().playerTrackId,
+    })
     if (info.track == null) return
     if (ensureLx().isPlayedStop) return handleExitApp('Timeout Exit')
+    if (ensureLx().isPreparingPlayerTrack) return
+    if (ensureLx().isSwitchingPlayerTrack) return
 
     // console.log('global.lx.playerTrackId====>', global.lx.playerTrackId)
     if (isEmpty()) {

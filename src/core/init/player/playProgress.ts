@@ -9,6 +9,7 @@ import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
 import { onScreenStateChange } from '@/utils/nativeModules/utils'
 import { AppState } from 'react-native'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 const delaySavePlayInfo = throttleBackgroundTimer(() => {
   void savePlayInfo({
@@ -19,6 +20,22 @@ const delaySavePlayInfo = throttleBackgroundTimer(() => {
   })
 }, 2000)
 
+const parseInterval = (interval?: string | null) => {
+  if (!interval) return 0
+  const parts = interval.split(':').map(part => Number(part))
+  if (!parts.length || parts.some(part => !Number.isFinite(part))) return 0
+
+  let seconds = 0
+  for (const part of parts) seconds = seconds * 60 + part
+  return seconds
+}
+
+const getMusicInterval = () => {
+  const musicInfo = playerState.playMusicInfo.musicInfo
+  if (!musicInfo) return 0
+  return parseInterval('progress' in musicInfo ? musicInfo.metadata.musicInfo.interval : musicInfo.interval)
+}
+
 export default () => {
   // const updateMusicInfo = useCommit('list', 'updateMusicInfo')
 
@@ -26,10 +43,30 @@ export default () => {
 
   let isScreenOn = true
 
+  const updateMaxTime = (duration: number, source: 'native' | 'metadata' = 'native') => {
+    if (!Number.isFinite(duration) || duration <= 0) return
+    if (source == 'native') {
+      if (duration < 1) return
+      if (playerState.progress.maxPlayTime > 0 && duration < playerState.progress.maxPlayTime * 0.5) return
+    }
+    if (Math.abs(playerState.progress.maxPlayTime - duration) < 0.5) return
+    setMaxplayTime(duration)
+    void appendDeviceDebugLog('[player] progress duration updated', {
+      duration,
+      position: playerState.progress.nowPlayTime,
+      source,
+    })
+  }
+  const updateMaxTimeByMetadata = () => {
+    if (playerState.progress.maxPlayTime > 0) return
+    updateMaxTime(getMusicInterval(), 'metadata')
+  }
   const getCurrentTime = () => {
     let id = playerState.musicInfo.id
-    void getPosition().then(position => {
-      if (!position || id != playerState.musicInfo.id) return
+    void Promise.all([getPosition(), getDuration()]).then(([position, duration]) => {
+      if (id != playerState.musicInfo.id) return
+      updateMaxTime(duration)
+      if (!position) return
       setNowPlayTime(position)
       if (!playerState.isPlay) return
 
@@ -39,7 +76,8 @@ export default () => {
     })
   }
   const getMaxTime = async() => {
-    setMaxplayTime(await getDuration())
+    updateMaxTime(await getDuration())
+    updateMaxTimeByMetadata()
 
     if (playerState.playMusicInfo.musicInfo && 'source' in playerState.playMusicInfo.musicInfo && !playerState.playMusicInfo.musicInfo.interval) {
       // console.log(formatPlayTime2(playProgress.maxPlayTime))
@@ -83,6 +121,7 @@ export default () => {
 
 
   const handlePlay = () => {
+    updateMaxTimeByMetadata()
     void getMaxTime()
     // prevProgressStatus = 'normal'
     // handleSetTaskBarState(playProgress.progress, prevProgressStatus)

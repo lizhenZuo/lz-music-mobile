@@ -524,7 +524,7 @@ export const createStyle = <T extends StyleSheet.NamedStyles<T>>(styles: T | Sty
   for (const [n, s] of Object.entries(newStyle)) {
     newStyle[n] = trasformeStyle(s)
   }
-  return StyleSheet.create(newStyle as StyleSheet.NamedStyles<T>)
+  return StyleSheet.create(newStyle as StyleSheet.NamedStyles<T>) as T
 }
 
 export const isHorizontalMode = (width: number, height: number): boolean => {

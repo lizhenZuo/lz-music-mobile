@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import TrackPlayer, { State, Event } from 'react-native-track-player'
+import { normalizePlaybackTime } from './time'
 
 /** Get current playback state and subsequent updatates  */
 export const usePlaybackState = () => {
@@ -80,9 +81,9 @@ export function useProgress(updateInterval: number) {
 
   const getProgress = async() => {
     const [position, duration, buffered] = await Promise.all([
-      TrackPlayer.getPosition(),
-      TrackPlayer.getDuration(),
-      TrackPlayer.getBufferedPosition(),
+      TrackPlayer.getPosition().then(normalizePlaybackTime),
+      TrackPlayer.getDuration().then(normalizePlaybackTime),
+      TrackPlayer.getBufferedPosition().then(normalizePlaybackTime),
     ])
     // After the asynchronous code is executed, if the component has been uninstalled, do not update the status
     if (isUnmountedRef.current) return
@@ -119,7 +120,7 @@ export function useBufferProgress() {
     let isUnmounted = false
     let preBuffered = 0
     let duration = 0
-    let interval: NodeJS.Timer | null = null
+    let interval: number | null = null
 
     const clearItv = () => {
       if (!interval) return
@@ -127,7 +128,10 @@ export function useBufferProgress() {
       interval = null
     }
     const updateBuffer = async() => {
-      const buffered = await (duration ? TrackPlayer.getBufferedPosition() : Promise.all([TrackPlayer.getBufferedPosition(), TrackPlayer.getDuration()]).then(([buffered, _duration]) => {
+      const buffered = await (duration ? TrackPlayer.getBufferedPosition().then(normalizePlaybackTime) : Promise.all([
+        TrackPlayer.getBufferedPosition().then(normalizePlaybackTime),
+        TrackPlayer.getDuration().then(normalizePlaybackTime),
+      ]).then(([buffered, _duration]) => {
         duration = _duration
         return buffered
       }))
@@ -161,7 +165,7 @@ export function useBufferProgress() {
           // console.log('state', 'Buffering')
           clearItv()
           duration = 0
-          interval = setInterval(updateBuffer, 1000)
+          interval = setInterval(updateBuffer, 1000) as unknown as number
           void updateBuffer()
           break
         // case State.Connecting:
@@ -175,7 +179,7 @@ export function useBufferProgress() {
 
     void updateBuffer()
     void TrackPlayer.getState().then((state) => {
-      if (state == State.Buffering) interval = setInterval(updateBuffer, 1000)
+      if (state == State.Buffering) interval = setInterval(updateBuffer, 1000) as unknown as number
     })
     return () => {
       isUnmounted = true

@@ -9,10 +9,34 @@ import { addDislikeInfo, hasDislike } from '@/core/dislikeList'
 import playerState from '@/store/player/state'
 import musicSdk from '@/utils/musicSdk'
 import { toOldMusicInfo } from '@/utils'
+import { log } from '@/utils/log'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 export const handlePlay = (musicInfo: LX.Music.MusicInfoOnline) => {
+  log.info('[onlineList] handlePlay tap', {
+    id: musicInfo.id,
+    source: musicInfo.source,
+    name: musicInfo.name,
+    singer: musicInfo.singer,
+  })
+  void appendDeviceDebugLog('[onlineList] handlePlay tap', {
+    id: musicInfo.id,
+    source: musicInfo.source,
+    name: musicInfo.name,
+    singer: musicInfo.singer,
+  })
   void addListMusics(LIST_IDS.DEFAULT, [musicInfo], settingState.setting['list.addMusicLocationType']).then(() => {
     const index = getListMusicSync(LIST_IDS.DEFAULT).findIndex(m => m.id == musicInfo.id)
+    log.info('[onlineList] handlePlay addList result', {
+      id: musicInfo.id,
+      index,
+      listSize: getListMusicSync(LIST_IDS.DEFAULT).length,
+    })
+    void appendDeviceDebugLog('[onlineList] handlePlay addList result', {
+      id: musicInfo.id,
+      index,
+      listSize: getListMusicSync(LIST_IDS.DEFAULT).length,
+    })
     if (index < 0) return
     void playList(LIST_IDS.DEFAULT, index)
   })
@@ -52,4 +76,3 @@ export const handleDislikeMusic = async(musicInfo: LX.Music.MusicInfoOnline) => 
     void playNext(true)
   }
 }
-

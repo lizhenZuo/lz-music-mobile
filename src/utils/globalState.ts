@@ -1,4 +1,4 @@
-type PlayerStatusState = {
+interface PlayerStatusState {
   isInitialized: boolean
   isRegisteredService: boolean
   isIniting: boolean
@@ -28,6 +28,14 @@ const createDefaultLxState = (): LxState => ({
   jumpMyListPosition: false,
   settingActiveId: 'basic',
   homePagerIdle: true,
+  isSwitchingPlayerTrack: false,
+  isPreparingPlayerTrack: false,
+  isIosRegressionRunning: false,
+  isIosRegressionDone: false,
+  isIosPageAuditRunning: false,
+  isIosPageAuditDone: false,
+  isIosAutoPlayRunning: false,
+  isIosAutoPlayDone: false,
 })
 
 export const ensureLx = (): LxState => {
@@ -35,11 +43,20 @@ export const ensureLx = (): LxState => {
   lx.playerStatus ??= { ...defaultPlayerStatus }
   lx.qualityList ??= {}
   lx.apis ??= {}
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
   lx.apiInitPromise ??= [Promise.resolve(false), true, () => {}]
   lx.fontSize = Number.isFinite(lx.fontSize) && lx.fontSize > 0 ? lx.fontSize : 1
   lx.playerTrackId ??= ''
   lx.gettingUrlId ??= ''
   lx.settingActiveId ??= 'basic'
+  lx.isSwitchingPlayerTrack ??= false
+  lx.isPreparingPlayerTrack ??= false
+  lx.isIosRegressionRunning ??= false
+  lx.isIosRegressionDone ??= false
+  lx.isIosPageAuditRunning ??= false
+  lx.isIosPageAuditDone ??= false
+  lx.isIosAutoPlayRunning ??= false
+  lx.isIosAutoPlayDone ??= false
   global.lx = lx
   return lx
 }

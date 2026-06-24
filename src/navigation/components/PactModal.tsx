@@ -88,8 +88,12 @@ const Footer = ({ componentId }: { componentId: string }) => {
           [{
             text: Buffer.from('e5a5bde79a8420284f4b29', 'hex').toString(),
             onPress: () => {
-              void checkUpdate()
-              void initDeeplink()
+              void checkUpdate().catch((err) => {
+                console.log('[PactModal] checkUpdate failed', err)
+              })
+              void initDeeplink().catch((err) => {
+                console.log('[PactModal] initDeeplink failed', err)
+              })
             },
           }],
         )

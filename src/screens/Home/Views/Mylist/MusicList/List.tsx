@@ -1,6 +1,6 @@
 import { playList } from '@/core/player/player'
 import { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react'
-import { FlatList, type NativeScrollEvent, type NativeSyntheticEvent, type FlatListProps } from 'react-native'
+import { FlatList, type NativeScrollEvent, type NativeSyntheticEvent, Platform, type FlatListProps } from 'react-native'
 
 import listState from '@/store/list/state'
 import playerState from '@/store/player/state'
@@ -14,6 +14,7 @@ import type { Position } from './ListMenu'
 import type { SelectMode } from './MultipleModeBar'
 import { useActiveListId } from '@/store/list/hook'
 import { useSettingValue } from '@/store/setting/hook'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 type FlatListType = FlatListProps<LX.Music.MusicInfo>
 
@@ -224,7 +225,16 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
     // console.log(global.lx.homePagerIdle)
     requestAnimationFrame(() => {
       // console.log(global.lx.homePagerIdle)
-      if (!global.lx.homePagerIdle) return
+      if (!global.lx.homePagerIdle) {
+        void appendDeviceDebugLog('[mylist] handlePress blocked by homePagerIdle', {
+          id: item.id,
+          source: item.source,
+          index,
+          homePagerIdle: global.lx.homePagerIdle,
+          platform: Platform.OS,
+        })
+        if (Platform.OS !== 'ios') return
+      }
       if (isMultiSelectModeRef.current) {
         handleSelect(item, index)
       } else {

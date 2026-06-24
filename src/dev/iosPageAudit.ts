@@ -4,11 +4,18 @@ import { setNavActiveId } from '@/core/common'
 import { navigations, showPactModal, showSyncModeModal, showVersionModal } from '@/navigation'
 import playerState from '@/store/player/state'
 import { type ListInfoItem } from '@/store/songlist/state'
+import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
 
 const wait = async(ms: number) => new Promise<void>(resolve => {
   setTimeout(resolve, ms)
 })
 const STEP_WAIT = 4000
+
+const logStep = (step: string) => {
+  const line = `[iOS Page Audit] step=${step}`
+  console.log(line)
+  void appendDeviceDebugLog(line)
+}
 
 const mockSonglistInfo = (): ListInfoItem => ({
   id: 'ios-ui-audit-songlist',
@@ -33,50 +40,50 @@ export const runIosPageAudit = async() => {
     }
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=menu_open')
+    logStep('menu_open')
     global.app_event.changeMenuVisible(true)
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=menu_close')
+    logStep('menu_close')
     global.app_event.changeMenuVisible(false)
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=setting')
+    logStep('setting')
     setNavActiveId('nav_setting')
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=search')
+    logStep('search')
     setNavActiveId('nav_search')
 
     const homeId = commonState.componentIds.home
     if (homeId) {
       await wait(STEP_WAIT)
-      console.log('[iOS Page Audit] step=songlist_detail')
+      logStep('songlist_detail')
       navigations.pushSonglistDetailScreen(homeId, mockSonglistInfo())
 
       await wait(STEP_WAIT)
-      console.log('[iOS Page Audit] step=play_detail')
+      logStep('play_detail')
       navigations.pushPlayDetailScreen(homeId, true)
 
       await wait(STEP_WAIT)
       if (playerState.playMusicInfo.musicInfo) {
-        console.log('[iOS Page Audit] step=comment')
+        logStep('comment')
         navigations.pushCommentScreen(commonState.componentIds.playDetail ?? homeId)
       } else {
-        console.log('[iOS Page Audit] step=comment skipped: no music info')
+        logStep('comment skipped: no music info')
       }
     }
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=version_modal')
+    logStep('version_modal')
     showVersionModal()
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=sync_modal')
+    logStep('sync_modal')
     showSyncModeModal()
 
     await wait(STEP_WAIT)
-    console.log('[iOS Page Audit] step=pact_modal')
+    logStep('pact_modal')
     showPactModal()
   } finally {
     global.lx.isIosPageAuditRunning = false

@@ -165,9 +165,13 @@ const VersionModal = ({ componentId }: { componentId: string }) => {
 
   const handleConfirm = () => {
     if (versionInfo.isLatest || versionInfo.isUnknown) {
-      void checkUpdate()
+      void checkUpdate().catch((err) => {
+        console.log('[VersionModal] checkUpdate failed', err)
+      })
     } else if (versionInfo.status == 'downloaded') {
-      void updateApp()
+      void updateApp().catch((err) => {
+        console.log('[VersionModal] updateApp failed', err)
+      })
     } else if (versionInfo.status == 'idle' || versionInfo.status == 'error') {
       downloadUpdate()
     }

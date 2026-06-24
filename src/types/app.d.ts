@@ -47,6 +47,46 @@ interface GlobalData {
    */
   homePagerIdle: boolean
 
+  /**
+   * 播放器是否正在主动切换曲目，避免 iOS reset 阶段误判为空队列结束
+   */
+  isSwitchingPlayerTrack: boolean
+
+  /**
+   * 播放器是否正处于切歌准备阶段，避免 stop/reset 期间的 iOS 伪 ended 事件触发自动下一首
+   */
+  isPreparingPlayerTrack: boolean
+
+  /**
+   * iOS 自动回归检测是否正在运行
+   */
+  isIosRegressionRunning: boolean
+
+  /**
+   * iOS 自动回归检测是否已完成
+   */
+  isIosRegressionDone: boolean
+
+  /**
+   * iOS 页面巡检是否正在运行
+   */
+  isIosPageAuditRunning: boolean
+
+  /**
+   * iOS 页面巡检是否已完成
+   */
+  isIosPageAuditDone: boolean
+
+  /**
+   * iOS 真歌播放检测是否正在运行
+   */
+  isIosAutoPlayRunning: boolean
+
+  /**
+   * iOS 真歌播放检测是否已完成
+   */
+  isIosAutoPlayDone: boolean
+
   // windowInfo: {
   //   screenW: number
   //   screenH: number

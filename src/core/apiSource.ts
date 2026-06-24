@@ -3,14 +3,16 @@ import musicSdk from '@/utils/musicSdk'
 // import apiSourceInfo from '@renderer/utils/musicSdk/api-source-info'
 import { updateSetting } from './common'
 import settingState from '@/store/setting/state'
-import { destroyUserApi, setUserApi } from './userApi'
+import { destroyUserApi, setUserApi, setUserApiStatus } from './userApi'
 import apiSourceInfo from '@/utils/musicSdk/api-source-info'
-import { setUserApiStatus } from './userApi'
 import { ensureLx } from '@/utils/globalState'
+import { state as userApiState } from '@/store/userApi'
 
 
 export const setApiSource = (apiId: string) => {
+  if (!apiId) apiId = apiSourceInfo.find(api => !api.disabled)?.id ?? userApiState.list[0]?.id ?? ''
   const lx = ensureLx()
+  const isSourceChanged = apiId != settingState.setting['common.apiSource']
   if (lx.apiInitPromise[1]) {
     lx.apiInitPromise[0] = new Promise(resolve => {
       lx.apiInitPromise[1] = false
@@ -20,6 +22,7 @@ export const setApiSource = (apiId: string) => {
       }
     })
   }
+  if (isSourceChanged) updateSetting({ 'common.apiSource': apiId })
   if (/^user_api/.test(apiId)) {
     setUserApi(apiId).catch(err => {
       if (!lx.apiInitPromise[1]) lx.apiInitPromise[2](false)
@@ -38,8 +41,7 @@ export const setApiSource = (apiId: string) => {
     // void setUserApiAction(apiId)
   }
 
-  if (apiId != settingState.setting['common.apiSource']) {
-    updateSetting({ 'common.apiSource': apiId })
+  if (isSourceChanged) {
     requestAnimationFrame(() => {
       global.state_event.apiSourceUpdated(apiId)
     })

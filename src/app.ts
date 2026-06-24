@@ -7,8 +7,12 @@ import { exitApp } from './utils/nativeModules/utils'
 import { windowSizeTools } from './utils/windowSizeTools'
 import { listenLaunchEvent } from './navigation/regLaunchedEvent'
 import { tipDialog } from './utils/tools'
+import { appendDeviceDebugLog, resetDeviceDebugLog } from './utils/deviceDebugLog'
 
 console.log('starting app...')
+void resetDeviceDebugLog().then(async() => {
+  await appendDeviceDebugLog('[app] start')
+})
 listenLaunchEvent()
 
 const shouldRunIosDevChecks = __DEV__ && Boolean((global as typeof globalThis & {
@@ -56,12 +60,23 @@ void Promise.all([getFontSize(), windowSizeTools.init()]).then(async([fontSize])
     if (!isInited) return
 
     await navigations.pushHomeScreen().then(() => {
-      void handlePushedHomeScreen()
+      void Promise.resolve(handlePushedHomeScreen()).catch((err: unknown) => {
+        console.log('[app] handlePushedHomeScreen failed', err)
+      })
       if (shouldRunIosDevChecks) {
-        const regressionPromise = import('./dev/iosRegression').then(({ runIosRegression }) => runIosRegression()).catch((err) => {
+        const regressionPromise = import('./dev/iosRegression').then(async({ runIosRegression }) => {
+          await runIosRegression()
+        }).catch((err) => {
           console.log('[iOS Regression] load failed', err)
         })
-        void regressionPromise.then(() => import('./dev/iosPageAudit')).then(({ runIosPageAudit }) => runIosPageAudit()).catch((err) => {
+        const autoPlayPromise = regressionPromise.then(async() => import('./dev/iosAutoPlay')).then(async({ runIosAutoPlay }) => {
+          await runIosAutoPlay()
+        }).catch((err) => {
+          console.log('[iOS AutoPlay] load failed', err)
+        })
+        void autoPlayPromise.then(async() => import('./dev/iosPageAudit')).then(async({ runIosPageAudit }) => {
+          await runIosPageAudit()
+        }).catch((err) => {
           console.log('[iOS Page Audit] load failed', err)
         })
       }

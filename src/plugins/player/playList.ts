@@ -4,6 +4,7 @@ import { Platform } from 'react-native'
 import { defaultUrl } from '@/config'
 // import { action as playerAction } from '@/store/modules/player'
 import settingState from '@/store/setting/state'
+import { normalizePlaybackTime } from './time'
 
 
 const list: LX.Player.Track[] = []
@@ -111,7 +112,7 @@ export const getCurrentTrack = async() => {
 
 export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: boolean, lyric?: string, force = false) => {
   if (!force && isPlay == state.isPlaying) {
-    const duration = await TrackPlayer.getDuration()
+    const duration = normalizePlaybackTime(await TrackPlayer.getDuration())
     if (state.prevDuration != duration) {
       state.prevDuration = duration
       const trackInfo = await getCurrentTrack()
@@ -120,7 +121,10 @@ export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: bool
       }
     }
   } else {
-    const [duration, trackInfo] = await Promise.all([TrackPlayer.getDuration(), getCurrentTrack()])
+    const [duration, trackInfo] = await Promise.all([
+      TrackPlayer.getDuration().then(normalizePlaybackTime),
+      getCurrentTrack(),
+    ])
     state.prevDuration = duration
     if (trackInfo && musicInfo) {
       delayUpdateMusicInfo(musicInfo, lyric)
@@ -144,19 +148,26 @@ const handlePlayMusic = async(musicInfo: LX.Player.PlayMusic, url: string, time:
   console.log('[player] handlePlayMusic start', { url, time, trackId: track?.id })
 
   if (Platform.OS === 'ios') {
-    await TrackPlayer.reset()
-    list.splice(0, list.length)
-    await TrackPlayer.add(tracks).then(() => list.push(...tracks))
-    console.log('[player] ios reset/add done', { listLength: list.length })
-    if (!isTempTrack(track.id as string)) {
-      if (time) await TrackPlayer.seekTo(time)
-      if (global.lx.restorePlayInfo) {
-        await TrackPlayer.pause()
-        global.lx.restorePlayInfo = null
-      } else {
-        console.log('[player] ios play current track')
-        await TrackPlayer.play()
+    global.lx.isSwitchingPlayerTrack = true
+    try {
+      await TrackPlayer.reset()
+      list.splice(0, list.length)
+      await TrackPlayer.add(tracks).then(() => list.push(...tracks))
+      console.log('[player] ios reset/add done', { listLength: list.length })
+      if (!isTempTrack(track.id as string)) {
+        if (time) await TrackPlayer.seekTo(time)
+        if (global.lx.restorePlayInfo) {
+          await TrackPlayer.pause()
+          global.lx.restorePlayInfo = null
+        } else {
+          console.log('[player] ios play current track')
+          await TrackPlayer.play()
+        }
       }
+    } finally {
+      setTimeout(() => {
+        global.lx.isSwitchingPlayerTrack = false
+      }, 300)
     }
     return
   }
@@ -205,9 +216,13 @@ let playPromise = Promise.resolve()
 let actionId = Math.random()
 export const playMusic = (musicInfo: LX.Player.PlayMusic, url: string, time: number) => {
   const id = actionId = Math.random()
-  void playPromise.finally(() => {
+  void playPromise.catch((err) => {
+    console.log('[player] play queue previous task failed', err)
+  }).finally(() => {
     if (id != actionId) return
-    playPromise = handlePlayMusic(musicInfo, url, time)
+    playPromise = handlePlayMusic(musicInfo, url, time).catch((err) => {
+      console.log('[player] play queue task failed', err)
+    })
   })
 }
 
@@ -302,10 +317,14 @@ const debounceUpdateMetaInfoTools = {
   init() {
     return this.debounce(async(musicInfo: LX.Player.MusicInfo, lyric?: string) => {
       this.musicInfo = musicInfo
-      return this.updateMetaPromise.then(() => {
+      return this.updateMetaPromise.catch((err) => {
+        console.log('[player] updateMetaPromise previous task failed', err)
+      }).then(() => {
         // console.log('run')
         if (this.musicInfo?.id === musicInfo.id) {
-          this.updateMetaPromise = updateMetaInfo(musicInfo, lyric)
+          this.updateMetaPromise = updateMetaInfo(musicInfo, lyric).catch((err) => {
+            console.log('[player] updateMetaInfo failed', err)
+          })
         }
       })
     })
