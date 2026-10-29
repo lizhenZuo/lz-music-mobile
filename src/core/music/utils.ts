@@ -10,7 +10,7 @@ import { assertApiSupport } from '@/utils/tools'
 import { ensureQualityList } from '@/utils/globalState'
 import settingState from '@/store/setting/state'
 import { requestMsg } from '@/utils/message'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { apis } from '@/utils/musicSdk/api-source'
 
 

@@ -17,6 +17,7 @@ const defaultUser = require('@/resources/images/defaultUser.jpg')
 
 const GAP = 12
 const avatarWidth = scaleSizeW(36)
+const normalizeAvatarUrl = (url?: string) => url?.replace(/^http:\/\/(?:wx|q)\.qlogo\.cn\//, match => match.replace('http:', 'https:'))
 
 const CommentFloor = memo(({ comment, isLast }: {
   comment: Comment
@@ -63,7 +64,7 @@ const CommentFloor = memo(({ comment, isLast }: {
       <View style={styles.comment}>
         <View>
           <Image
-            url={comment.avatar && !isAvatarError ? comment.avatar : defaultUser}
+            url={comment.avatar && !isAvatarError ? normalizeAvatarUrl(comment.avatar) : defaultUser}
             onError={handleAvatarError}
             style={stylesRaw.avatar} />
         </View>

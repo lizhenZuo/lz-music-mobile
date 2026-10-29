@@ -1,6 +1,6 @@
 // import needle from 'needle'
 // import progress from 'request-progress'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { requestMsg } from './message'
 import { bHh } from './musicSdk/options'
 import { deflateRaw } from 'pako'

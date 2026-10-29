@@ -90,7 +90,7 @@ export const setNavActiveId = (id: Parameters<typeof commonActions.setNavActiveI
 }
 
 export const showPactModal = () => {
-  handleShowPactModal()
+  void handleShowPactModal()
 }
 
 export const checkStoragePermissions = async() => {

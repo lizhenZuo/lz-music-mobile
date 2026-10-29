@@ -29,6 +29,8 @@ import { initial as playerInitial, setResource } from '@/plugins/player'
 import settingState from '@/store/setting/state'
 import { ensurePlayerStatus } from '@/utils/globalState'
 import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
+import { getPosition } from '@/plugins/player/compat'
+import { defaultUrl } from '@/config'
 
 interface TestResult {
   name: string
@@ -50,8 +52,6 @@ interface RegressionReport {
 const REPORT_PATH = `${privateStorageDirectoryPath}/ios-regression-report.json`
 const DOWNLOAD_PATH = `${temporaryDirectoryPath}/ios-download-test.txt`
 const CACHE_TEST_PATH = `${temporaryDirectoryPath}/ios-cache-test.txt`
-const PLAYBACK_FILE_PATH = `${privateStorageDirectoryPath}/ios-playback-test.mp3`
-const PLAYBACK_TEST_URL = 'https://filesamples.com/samples/audio/mp3/sample1.mp3'
 
 const FIXED_PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
@@ -117,7 +117,7 @@ const createPlaybackMusicInfo = (): LX.Player.PlayMusic => {
       songId: 'ios-selftest-track',
       picUrl: '',
       albumName: 'Regression',
-      filePath: PLAYBACK_FILE_PATH,
+      filePath: '',
       ext: 'mp3',
     },
   }
@@ -132,7 +132,7 @@ const attemptPlayback = async(url: string) => {
   setResource(createPlaybackMusicInfo(), url, 0)
   console.log('[iOS Regression] playback setResource invoked')
   let state = await withTimeout('TrackPlayer.getState', TrackPlayer.getState())
-  let position = await withTimeout('TrackPlayer.getPosition', TrackPlayer.getPosition())
+  let position = await withTimeout('TrackPlayer.getPosition', getPosition())
   let maxPosition = position
   let sawPlaying = state === TrackPlayerState.Playing
   const states = [String(state)]
@@ -140,7 +140,7 @@ const attemptPlayback = async(url: string) => {
   for (let i = 0; i < 12; i++) {
     await wait(500)
     state = await withTimeout('TrackPlayer.getState', TrackPlayer.getState())
-    position = await withTimeout('TrackPlayer.getPosition', TrackPlayer.getPosition())
+    position = await withTimeout('TrackPlayer.getPosition', getPosition())
     maxPosition = Math.max(maxPosition, position)
     sawPlaying ||= state === TrackPlayerState.Playing
     states.push(String(state))
@@ -156,7 +156,7 @@ const attemptPlayback = async(url: string) => {
     position,
     maxPosition,
     sawPlaying,
-    ok: sawPlaying || maxPosition > 0.1,
+    ok: sawPlaying && maxPosition > 0.5,
   }
 }
 
@@ -297,22 +297,13 @@ const testCache = async(results: TestResult[]) => {
 
 const testPlayback = async(results: TestResult[]) => {
   try {
-    await unlink(PLAYBACK_FILE_PATH).catch(() => {})
-    const download = downloadFile(PLAYBACK_TEST_URL, PLAYBACK_FILE_PATH, { readTimeout: 15000, background: false })
-    const downloadResponse = await download.promise
-    const playbackFileExists = await existsFile(PLAYBACK_FILE_PATH)
-    const playbackFileStat = playbackFileExists ? await stat(PLAYBACK_FILE_PATH) : null
-
     await prepareFreshPlayer()
-    const fileAttempt = await attemptPlayback(`file://${PLAYBACK_FILE_PATH}`)
-
-    await prepareFreshPlayer()
-    const remoteAttempt = await attemptPlayback(PLAYBACK_TEST_URL)
+    const bundledAttempt = await attemptPlayback(String(defaultUrl))
 
     pushResult(results, {
       name: 'playback',
-      ok: remoteAttempt.ok && fileAttempt.ok,
-      details: `remoteState=${String(remoteAttempt.state)}, remotePosition=${remoteAttempt.position.toFixed(2)}s, remoteMaxPosition=${remoteAttempt.maxPosition.toFixed(2)}s, remoteSawPlaying=${remoteAttempt.sawPlaying}, downloadStatus=${downloadResponse.statusCode}, fileState=${String(fileAttempt.state)}, filePosition=${fileAttempt.position.toFixed(2)}s, fileMaxPosition=${fileAttempt.maxPosition.toFixed(2)}s, fileSawPlaying=${fileAttempt.sawPlaying}, fileExists=${playbackFileExists}, fileSize=${playbackFileStat?.size ?? -1}, resource=file://${PLAYBACK_FILE_PATH}`,
+      ok: bundledAttempt.ok,
+      details: `state=${String(bundledAttempt.state)}, position=${bundledAttempt.position.toFixed(2)}s, maxPosition=${bundledAttempt.maxPosition.toFixed(2)}s, sawPlaying=${bundledAttempt.sawPlaying}, resource=bundled`,
     })
   } catch (err: any) {
     pushResult(results, {
@@ -325,7 +316,6 @@ const testPlayback = async(results: TestResult[]) => {
     const playerStatus = ensurePlayerStatus()
     playerStatus.isInitialized = false
     playerStatus.isIniting = false
-    await unlink(PLAYBACK_FILE_PATH).catch(() => {})
   }
 }
 

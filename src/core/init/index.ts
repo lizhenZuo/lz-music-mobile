@@ -36,13 +36,7 @@ const handlePushedHomeScreen = async() => {
     }
   } else {
     if (isFirstPush) isFirstPush = false
-    if (shouldSuppressNonCriticalModals()) {
-      void initDeeplink().catch((err) => {
-        console.log('[init] initDeeplink failed', err)
-      })
-    } else {
-      showPactModal()
-    }
+    showPactModal()
   }
 }
 

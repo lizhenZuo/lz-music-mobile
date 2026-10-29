@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 import commonState from '@/store/common/state'
 import { setNavActiveId } from '@/core/common'
-import { navigations, showPactModal, showSyncModeModal, showVersionModal } from '@/navigation'
+import { dismissOverlay, navigations, showPactModal, showSyncModeModal, showVersionModal } from '@/navigation'
 import playerState from '@/store/player/state'
 import { type ListInfoItem } from '@/store/songlist/state'
 import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
@@ -76,15 +76,19 @@ export const runIosPageAudit = async() => {
 
     await wait(STEP_WAIT)
     logStep('version_modal')
-    showVersionModal()
-
+    const versionModalId = await showVersionModal()
     await wait(STEP_WAIT)
+    await dismissOverlay(versionModalId)
+
     logStep('sync_modal')
-    showSyncModeModal()
-
+    const syncModalId = await showSyncModeModal()
     await wait(STEP_WAIT)
+    await dismissOverlay(syncModalId)
+
     logStep('pact_modal')
-    showPactModal()
+    const pactModalId = await showPactModal()
+    await wait(STEP_WAIT)
+    await dismissOverlay(pactModalId)
   } finally {
     global.lx.isIosPageAuditRunning = false
     global.lx.isIosPageAuditDone = true

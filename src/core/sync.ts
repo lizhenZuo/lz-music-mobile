@@ -28,7 +28,7 @@ const closeSyncModeModal = () => {
 export const selectSyncMode = async<T extends keyof LX.Sync.ModeTypes>(serverName: string, type: T) => new Promise<LX.Sync.ModeTypes[T]>((resolve, reject) => {
   removeSyncModeEvent()
   syncActions.setServerInfo(serverName, type)
-  showSyncModeModal()
+  void showSyncModeModal()
 
   const removeListeners = () => {
     removeListener!()

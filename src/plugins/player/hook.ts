@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import TrackPlayer, { State, Event } from 'react-native-track-player'
-import { normalizePlaybackTime } from './time'
+import { getBufferedPosition, getDuration, getPosition } from './compat'
 
 /** Get current playback state and subsequent updatates  */
 export const usePlaybackState = () => {
@@ -81,9 +81,9 @@ export function useProgress(updateInterval: number) {
 
   const getProgress = async() => {
     const [position, duration, buffered] = await Promise.all([
-      TrackPlayer.getPosition().then(normalizePlaybackTime),
-      TrackPlayer.getDuration().then(normalizePlaybackTime),
-      TrackPlayer.getBufferedPosition().then(normalizePlaybackTime),
+      getPosition(),
+      getDuration(),
+      getBufferedPosition(),
     ])
     // After the asynchronous code is executed, if the component has been uninstalled, do not update the status
     if (isUnmountedRef.current) return
@@ -128,9 +128,9 @@ export function useBufferProgress() {
       interval = null
     }
     const updateBuffer = async() => {
-      const buffered = await (duration ? TrackPlayer.getBufferedPosition().then(normalizePlaybackTime) : Promise.all([
-        TrackPlayer.getBufferedPosition().then(normalizePlaybackTime),
-        TrackPlayer.getDuration().then(normalizePlaybackTime),
+      const buffered = await (duration ? getBufferedPosition() : Promise.all([
+        getBufferedPosition(),
+        getDuration(),
       ]).then(([buffered, _duration]) => {
         duration = _duration
         return buffered

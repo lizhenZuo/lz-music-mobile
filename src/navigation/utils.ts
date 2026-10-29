@@ -17,10 +17,10 @@ export const pop = async(compId: string) => Navigation.pop(compId)
 export const popToRoot = async(compId: string) => Navigation.popToRoot(compId)
 export const popTo = async(compId: string) => Navigation.popTo(compId)
 
-export const showPactModal = () => {
+export const showPactModal = async() => {
   const theme = themeState.theme
 
-  void Navigation.showOverlay({
+  return Navigation.showOverlay({
     component: {
       name: PACT_MODAL,
       options: {
@@ -66,10 +66,10 @@ export const showPactModal = () => {
   })
 }
 
-export const showVersionModal = () => {
+export const showVersionModal = async() => {
   const theme = themeState.theme
 
-  void Navigation.showOverlay({
+  return Navigation.showOverlay({
     component: {
       name: VERSION_MODAL,
       options: {
@@ -115,10 +115,10 @@ export const showVersionModal = () => {
   })
 }
 
-export const showSyncModeModal = () => {
+export const showSyncModeModal = async() => {
   const theme = themeState.theme
 
-  void Navigation.showOverlay({
+  return Navigation.showOverlay({
     component: {
       name: SYNC_MODE_MODAL,
       options: {

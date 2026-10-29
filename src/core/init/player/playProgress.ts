@@ -4,7 +4,7 @@ import { setCurrentTime, getDuration, getPosition } from '@/plugins/player'
 import { formatPlayTime2 } from '@/utils/common'
 import { savePlayInfo } from '@/utils/data'
 import { throttleBackgroundTimer } from '@/utils/tools'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import playerState from '@/store/player/state'
 import settingState from '@/store/setting/state'
 import { onScreenStateChange } from '@/utils/nativeModules/utils'
@@ -200,7 +200,11 @@ export default () => {
 
   // 修复在某些设备上屏幕状态改变事件未触发导致的进度条未更新的问题
   AppState.addEventListener('change', (state) => {
-    if (state == 'active' && !isScreenOn) handleScreenStateChanged('ON')
+    if (state == 'active') {
+      if (!isScreenOn) handleScreenStateChanged('ON')
+    } else {
+      clearUpdateTimeout()
+    }
   })
 
   global.app_event.on('play', handlePlay)

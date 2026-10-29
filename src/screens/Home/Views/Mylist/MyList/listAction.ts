@@ -6,7 +6,7 @@ import { filterFileName, filterMusicList, formatPlayTime2, toNewMusicInfo } from
 import { handleImportListPart } from '@/screens/Home/Views/Setting/settings/Backup/actions'
 import { readMetadata, scanAudioFiles, type MusicMetadataFull } from '@/utils/localMediaMetadata'
 import settingState from '@/store/setting/state'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { type FileType } from '@/utils/fs'
 
 export const handleRemove = (listInfo: LX.List.UserListInfo) => {

@@ -6,7 +6,7 @@ import { gzipFile, readFile, temporaryDirectoryPath, unGzipFile, unlink, writeFi
 import { getSystemLocales, isIgnoringBatteryOptimization, isNotificationsEnabled, requestNotificationPermission, requestIgnoreBatteryOptimization, shareText } from '@/utils/nativeModules/utils'
 import musicSdk from '@/utils/musicSdk'
 import { getData, removeData, saveData } from '@/plugins/storage'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { scaleSizeH, scaleSizeW, setSpText } from './pixelRatio'
 import { toOldMusicInfo } from './index'
 import { stringMd5 } from 'react-native-quick-md5'
@@ -252,6 +252,7 @@ export const clipboardWriteText = (str: string) => {
 
 
 export const checkNotificationPermission = async() => {
+  if (Platform.OS !== 'android') return
   const isHide = await getData(storageDataPrefix.notificationTipEnable)
   if (isHide != null) return
   const enabled = await isNotificationsEnabled()

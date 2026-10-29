@@ -1,10 +1,10 @@
 import TrackPlayer, { State } from 'react-native-track-player'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { Platform } from 'react-native'
 import { defaultUrl } from '@/config'
 // import { action as playerAction } from '@/store/modules/player'
 import settingState from '@/store/setting/state'
-import { normalizePlaybackTime } from './time'
+import { getDuration, updateNowPlayingMetadata } from './compat'
 
 
 const list: LX.Player.Track[] = []
@@ -112,7 +112,7 @@ export const getCurrentTrack = async() => {
 
 export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: boolean, lyric?: string, force = false) => {
   if (!force && isPlay == state.isPlaying) {
-    const duration = normalizePlaybackTime(await TrackPlayer.getDuration())
+    const duration = await getDuration()
     if (state.prevDuration != duration) {
       state.prevDuration = duration
       const trackInfo = await getCurrentTrack()
@@ -122,7 +122,7 @@ export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: bool
     }
   } else {
     const [duration, trackInfo] = await Promise.all([
-      TrackPlayer.getDuration().then(normalizePlaybackTime),
+      getDuration(),
       getCurrentTrack(),
     ])
     state.prevDuration = duration
@@ -263,11 +263,7 @@ const updateMetaInfo = async(mInfo: LX.Player.MusicInfo, lyric?: string) => {
     artwork,
     duration: state.prevDuration || 0,
   }
-  if (Platform.OS === 'ios') {
-    await TrackPlayer.updateNowPlayingMetadata(metadata)
-  } else {
-    await TrackPlayer.updateNowPlayingMetadata(metadata, state.isPlaying)
-  }
+  await updateNowPlayingMetadata(metadata, state.isPlaying)
 }
 
 

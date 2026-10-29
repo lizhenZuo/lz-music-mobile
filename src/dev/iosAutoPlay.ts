@@ -8,6 +8,7 @@ import playerState from '@/store/player/state'
 import listState from '@/store/list/state'
 import { getListMusics } from '@/utils/listManage'
 import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
+import { getBufferedPosition, getDuration, getPosition } from '@/plugins/player/compat'
 
 interface AutoPlayTarget {
   listId: string
@@ -118,9 +119,9 @@ export const runIosAutoPlay = async() => {
       await wait(500)
       const [state, position, bufferedPosition, currentDuration] = await Promise.all([
         TrackPlayer.getState(),
-        TrackPlayer.getPosition(),
-        TrackPlayer.getBufferedPosition(),
-        TrackPlayer.getDuration(),
+        getPosition(),
+        getBufferedPosition(),
+        getDuration(),
       ])
       states.push(String(state))
       sawPlaying ||= state === TrackPlayerState.Playing
@@ -140,12 +141,16 @@ export const runIosAutoPlay = async() => {
       if (sawPlaying && maxPosition > 2) break
     }
 
-    const ok = sawPlaying || maxPosition > 0.1
+    const expectedDuration = playerState.progress.maxPlayTime
+    const durationSane = expectedDuration <= 0 || duration <= 0 || duration >= expectedDuration * 0.5
+    const ok = sawPlaying && maxPosition > 2 && durationSane
     log(ok ? 'PASS' : 'FAIL', {
       sawPlaying,
       maxPosition,
       maxBuffered,
       duration,
+      expectedDuration,
+      durationSane,
       states,
       currentMusicId: playerState.playMusicInfo.musicInfo?.id,
       currentStatusText: playerState.statusText,

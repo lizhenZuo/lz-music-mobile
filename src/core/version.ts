@@ -10,7 +10,7 @@ import { toast } from '@/utils/tools'
 export const showModal = () => {
   if (versionState.showModal) return
   versionActions.setVisibleModal(true)
-  showVersionModal()
+  void showVersionModal()
 }
 
 export const hideModal = (componentId: string) => {

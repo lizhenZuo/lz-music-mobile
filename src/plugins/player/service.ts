@@ -9,6 +9,8 @@ import { getCurrentTrackId } from './playList'
 import { pause, play, playNext, playPrev } from '@/core/player/player'
 import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
 import { appendDeviceDebugLog } from '@/utils/deviceDebugLog'
+import playerState from '@/store/player/state'
+import { Platform } from 'react-native'
 
 let isInitialized = false
 
@@ -128,10 +130,20 @@ const registerPlaybackService = async() => {
 
     // console.log('global.lx.playerTrackId====>', global.lx.playerTrackId)
     if (isEmpty()) {
+      const actualDuration = Number(info.position) || 0
+      const expectedDuration = playerState.progress.maxPlayTime
+      const isSuspiciousShortTrack = Platform.OS === 'ios' && expectedDuration >= 30 && actualDuration > 0 && actualDuration < Math.min(30, expectedDuration * 0.5)
       // console.log('====TEMP PAUSE====')
       await TrackPlayer.pause()
       global.app_event.playerPause()
       global.app_event.pause()
+      if (isSuspiciousShortTrack) {
+        void appendDeviceDebugLog('[TrackPlayer] suspicious short track', { actualDuration, expectedDuration })
+        global.app_event.error()
+        global.app_event.playerError()
+        global.app_event.playerEmptied()
+        return
+      }
       global.app_event.playerEnded()
       global.app_event.playerEmptied()
       // if (retryTrack) {

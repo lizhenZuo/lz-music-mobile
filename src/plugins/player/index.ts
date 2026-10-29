@@ -1,4 +1,5 @@
 import TrackPlayer from 'react-native-track-player'
+import { Platform } from 'react-native'
 import { updateOptions, setVolume, setPlaybackRate, migratePlayerCache } from './utils'
 import { ensurePlayerStatus } from '@/utils/globalState'
 
@@ -35,7 +36,9 @@ const initial = async({ volume, playRate, cacheSize, isHandleAudioFocus, isEnabl
     waitForBuffer: true,
     handleAudioFocus: isHandleAudioFocus,
     audioOffload: isEnableAudioOffload,
-    autoUpdateMetadata: false,
+    // SwiftAudioEx must publish elapsed time, duration and playback rate on iOS
+    // for the lock screen / Control Center media session to become visible.
+    autoUpdateMetadata: Platform.OS === 'ios',
   })
   playerStatus.isInitialized = true
   playerStatus.isIniting = false

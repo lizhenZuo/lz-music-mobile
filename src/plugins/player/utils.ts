@@ -1,11 +1,11 @@
 import TrackPlayer, { Capability, Event, RepeatMode, State } from 'react-native-track-player'
 import { Platform } from 'react-native'
-import BackgroundTimer from 'react-native-background-timer'
+import BackgroundTimer from '@/utils/timer'
 import { playMusic as handlePlayMusic } from './playList'
 import { existsFile, moveFile, privateStorageDirectoryPath, temporaryDirectoryPath } from '@/utils/fs'
 import { toast } from '@/utils/tools'
 import { ensureLx, ensurePlayerStatus } from '@/utils/globalState'
-import { normalizePlaybackTime } from './time'
+import { getBufferedPosition as getBufferedPositionCompat, getDuration as getDurationCompat, getPosition as getPositionCompat, updateNowPlayingMetadata } from './compat'
 // import { PlayerMusicInfo } from '@/store/modules/player/playInfo'
 
 
@@ -158,9 +158,9 @@ export const setResource = (musicInfo: LX.Player.PlayMusic, url: string, duratio
 }
 
 export const setPlay = async() => TrackPlayer.play()
-export const getPosition = async() => normalizePlaybackTime(await TrackPlayer.getPosition())
-export const getDuration = async() => normalizePlaybackTime(await TrackPlayer.getDuration())
-export const getBufferedPosition = async() => normalizePlaybackTime(await TrackPlayer.getBufferedPosition())
+export const getPosition = getPositionCompat
+export const getDuration = getDurationCompat
+export const getBufferedPosition = getBufferedPositionCompat
 export const setStop = async() => {
   await TrackPlayer.stop()
   if (Platform.OS === 'ios') return
@@ -176,12 +176,14 @@ export const setPlaybackRate = async(num: number) => TrackPlayer.setRate(num)
 export const updateNowPlayingTitles = async(duration: number, title: string, artist: string, album: string) => {
   console.log('set playing titles', duration, title, artist, album)
   if (Platform.OS === 'ios') {
-    return TrackPlayer.updateNowPlayingMetadata({
+    return updateNowPlayingMetadata({
       title,
       artist,
       album,
-      duration,
-    })
+      // Android's custom bridge receives milliseconds; MediaPlayer on iOS
+      // expects seconds.
+      duration: duration / 1000,
+    }, true)
   }
   return TrackPlayer.updateNowPlayingTitles(duration, title, artist, album)
 }
